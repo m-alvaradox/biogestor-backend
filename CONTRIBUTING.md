@@ -42,6 +42,8 @@ Cada PR deberá:
 5. Cumplir las verificaciones técnicas aplicables.
 6. Recibir al menos una aprobación de otro integrante, siempre que las protecciones del repositorio lo permitan.
 
+Plantilla Pull Request de ejemplo: https://github.com/m-alvaradox/biogestor-backend/blob/main/.github/pull_request_template.md
+
 No se deben aprobar los propios cambios.
 
 ## 5. Revisión de código
