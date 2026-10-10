@@ -50,6 +50,7 @@ Los módulos de dominio se dejan preparados como aplicaciones Django; sus modelo
 ~~~bash
 git clone https://github.com/m-alvaradox/biogestor-backend.git
 cd biogestor-backend
+git switch develop
 
 python3.13 -m venv .venv
 source .venv/bin/activate
