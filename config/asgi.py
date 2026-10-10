@@ -1,4 +1,5 @@
 """ASGI config for BioGestor."""
+
 import os
 
 from django.core.asgi import get_asgi_application
