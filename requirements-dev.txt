@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Herramientas de calidad y cobertura
+coverage>=7.6,<8.0
+ruff>=0.14,<1.0
