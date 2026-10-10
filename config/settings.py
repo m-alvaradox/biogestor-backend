@@ -1,4 +1,5 @@
 """Configuración base de Django para BioGestor."""
+
 import os
 from pathlib import Path
 
