@@ -12,6 +12,20 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: biogestor
+          POSTGRES_USER: biogestor
+          POSTGRES_PASSWORD: ci-only-not-for-deployment
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U biogestor -d biogestor"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DJANGO_SECRET_KEY: ci-only-not-for-deployment
       DJANGO_DEBUG: "true"
@@ -39,6 +53,9 @@ jobs:
 
       - name: Check Django configuration
         run: python manage.py check
+
+      - name: Verify migrations against clean PostgreSQL
+        run: python manage.py migrate --noinput
 
       - name: Lint
         run: ruff check .
