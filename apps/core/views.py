@@ -1,4 +1,5 @@
 """Endpoints transversales del backend."""
+
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
