@@ -90,6 +90,13 @@ docker compose exec backend python manage.py shell -c "from django.db import con
 
 Si se imprime `Conexión OK` y las migraciones se aplican, el backend se conecta correctamente a PostgreSQL.
 
+El comando `migrate` se ejecuta de forma manual y no es necesario después de cada inicio de los contenedores. Debe ejecutarse:
+
+- Al inicializar la base de datos por primera vez (por ejemplo, tras clonar el repositorio o después de `docker compose down -v`, que elimina los datos).
+- Cuando existan nuevas migraciones pendientes, por ejemplo después de actualizar la rama con cambios que incluyan migraciones.
+
+Django registra las migraciones ya aplicadas, por lo que volver a ejecutar `migrate` cuando no hay pendientes no modifica la base de datos.
+
 Las migraciones iniciales corresponden a las aplicaciones integradas de Django. Todavía no se han definido modelos de negocio de BioGestor, por lo que no se crean tablas de datasets, modelos ni experimentos en esta tarea.
 
 ### 5. Acceder al backend
