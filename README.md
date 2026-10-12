@@ -28,8 +28,10 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 │   ├── observations/   # Comentarios y observaciones
 │   └── storage/        # Referencias y acceso a archivos
 ├── config/             # Configuración Django, URLs, ASGI y WSGI
+├── .dockerignore       # Archivos excluidos de la imagen de Docker
 ├── .env.example        # Variables de ejemplo; no contiene secretos reales
-├── compose.yaml        # PostgreSQL para desarrollo local
+├── Dockerfile          # Imagen del backend para desarrollo local
+├── compose.yaml        # Backend y PostgreSQL para desarrollo local
 ├── manage.py
 ├── requirements.txt
 └── requirements-dev.txt
@@ -45,58 +47,68 @@ Los módulos de dominio se dejan preparados como aplicaciones Django; sus modelo
 
 ## Instalación y ejecución local
 
-### 1. Clonar el repositorio y preparar el entorno
+### 1. Clonar el repositorio
 
 ~~~bash
 git clone https://github.com/m-alvaradox/biogestor-backend.git
 cd biogestor-backend
 git switch develop
-
-python3.13 -m venv .venv
-source .venv/bin/activate
 ~~~
 
-En Windows PowerShell, activa el entorno con:
+No hace falta instalar Python ni PostgreSQL: el backend y la base de datos se ejecutan en contenedores con Docker.
 
-~~~powershell
-.venv\Scripts\Activate.ps1
-~~~
-
-### 2. Instalar dependencias y configurar el entorno
+### 2. Configurar el entorno
 
 ~~~bash
-python -m pip install --upgrade pip
-pip install -r requirements-dev.txt
 cp .env.example .env
+~~~
+
+En Windows PowerShell, copia el archivo con:
+
+~~~powershell
+Copy-Item .env.example .env
 ~~~
 
 Edita .env y coloca una clave de desarrollo propia y una contraseña local para PostgreSQL. El archivo .env se ignora desde Git y no debe subirse al repositorio.
 
-### 3. Iniciar PostgreSQL
+### 3. Iniciar PostgreSQL y el backend
 
 ~~~bash
-docker compose up -d db
+docker compose up --build -d
 docker compose ps
 ~~~
 
-La configuración expone PostgreSQL únicamente en la interfaz local, en el puerto indicado por POSTGRES_PORT (5432 por defecto). Si ya tienes PostgreSQL ejecutándose localmente, puedes omitir Compose y configurar las variables POSTGRES_* en .env.
+La configuración expone PostgreSQL únicamente en la interfaz local, en el puerto indicado por POSTGRES_PORT (5432 por defecto). Dentro de Docker, el backend se conecta al servicio `db`: POSTGRES_HOST se sobrescribe a `db`, por lo que el valor de .env solo aplica si ejecutas Django fuera de Docker.
 
 ### 4. Validar y preparar la base de datos
 
 ~~~bash
-python manage.py check
-python manage.py migrate
+docker compose exec backend python manage.py check
+docker compose exec backend python manage.py migrate
+docker compose exec backend python manage.py shell -c "from django.db import connection; connection.ensure_connection(); print('Conexión OK')"
 ~~~
+
+Si se imprime `Conexión OK` y las migraciones se aplican, el backend se conecta correctamente a PostgreSQL.
+
+El comando `migrate` se ejecuta de forma manual y no es necesario después de cada inicio de los contenedores. Debe ejecutarse:
+
+- Al inicializar la base de datos por primera vez (por ejemplo, tras clonar el repositorio o después de `docker compose down -v`, que elimina los datos).
+- Cuando existan nuevas migraciones pendientes, por ejemplo después de actualizar la rama con cambios que incluyan migraciones.
+
+Django registra las migraciones ya aplicadas, por lo que volver a ejecutar `migrate` cuando no hay pendientes no modifica la base de datos.
 
 Las migraciones iniciales corresponden a las aplicaciones integradas de Django. Todavía no se han definido modelos de negocio de BioGestor, por lo que no se crean tablas de datasets, modelos ni experimentos en esta tarea.
 
-### 5. Ejecutar el backend
+### 5. Acceder al backend
+
+El backend queda disponible en http://127.0.0.1:8000/ con el servidor de desarrollo de Django. No se debe usar runserver como servidor de producción.
+
+Para ver los registros del backend o detener el entorno:
 
 ~~~bash
-python manage.py runserver
+docker compose logs -f backend
+docker compose down        # conserva los datos; con -v también los elimina
 ~~~
-
-El servidor de desarrollo estará disponible en http://127.0.0.1:8000/. No se debe usar runserver como servidor de producción.
 
 ## Endpoint de estado
 
@@ -121,16 +133,18 @@ Ejemplo desde terminal:
 curl -i http://127.0.0.1:8000/api/v1/health/
 ~~~
 
+En Windows PowerShell usa `curl.exe` en lugar de `curl`.
+
 Las solicitudes POST y otros métodos no admitidos reciben HTTP 405 Method Not Allowed.
 
 ## Pruebas y calidad
 
 ~~~bash
-python manage.py test
-coverage run manage.py test
-coverage report --fail-under=70
-ruff check .
-ruff format --check .
+docker compose exec backend python manage.py test
+docker compose exec backend coverage run manage.py test
+docker compose exec backend coverage report --fail-under=70
+docker compose exec backend ruff check .
+docker compose exec backend ruff format --check .
 ~~~
 
 La integración continua ejecuta comprobaciones de Django, pruebas, cobertura mínima del 70 % para el módulo core del endpoint y comprobaciones de Ruff. Las pruebas del health check no requieren que PostgreSQL esté disponible; ejecutar migraciones sí requiere una base de datos activa.
