@@ -11,7 +11,7 @@ quote-style = "double"
 
 [tool.coverage.run]
 branch = true
-source = ["apps.core.views"]
+source = ["apps.core.views", "apps.core.models"]
 
 [tool.coverage.report]
 show_missing = true
