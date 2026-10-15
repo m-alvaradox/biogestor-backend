@@ -147,7 +147,25 @@ docker compose exec backend ruff check .
 docker compose exec backend ruff format --check .
 ~~~
 
-La integración continua ejecuta comprobaciones de Django, pruebas, cobertura mínima del 70 % para el módulo core del endpoint y comprobaciones de Ruff. Las pruebas del health check no requieren que PostgreSQL esté disponible; ejecutar migraciones sí requiere una base de datos activa.
+Las pruebas del health check no requieren que PostgreSQL esté disponible; ejecutar migraciones sí requiere una base de datos activa.
+
+## Integración continua
+
+El flujo `.github/workflows/ci.yml` se ejecuta con GitHub Actions en cada Pull Request y push hacia `develop` o `main`, y también puede lanzarse manualmente desde la pestaña Actions (`workflow_dispatch`). Tiene dos jobs:
+
+1. **Instalación, verificación y pruebas** (con un servicio PostgreSQL 17):
+   - Instala las dependencias de `requirements-dev.txt` con Python 3.13 (versión tomada de `.python-version`).
+   - Ejecuta `ruff check` y `ruff format --check`.
+   - Compila las fuentes con `python -m compileall`.
+   - Ejecuta `python manage.py check` y verifica que no falten migraciones (`makemigrations --check --dry-run`).
+   - Aplica las migraciones sobre una base de datos PostgreSQL limpia.
+   - Ejecuta las pruebas con Coverage.py y exige una cobertura mínima del 70 %.
+2. **Compilación de imagen Docker** (solo si el job anterior pasa):
+   - Construye la imagen a partir del `Dockerfile`.
+   - Ejecuta `python manage.py check` dentro de la imagen.
+   - Levanta el backend con Gunicorn y comprueba que `GET /api/v1/health/` responda.
+
+Las credenciales del workflow son exclusivas de CI y no se deben reutilizar en otros entornos. Se recomienda configurar ambos jobs como comprobaciones obligatorias en la protección de las ramas `develop` y `main`.
 
 ## Variables de entorno
 
