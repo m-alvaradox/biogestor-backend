@@ -1,5 +1,8 @@
 """Pruebas del módulo core."""
 
+from unittest import mock
+
+from django.db import OperationalError
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
@@ -23,6 +26,24 @@ class HealthEndpointTests(SimpleTestCase):
         response = self.client.post(reverse("health"))
 
         self.assertEqual(response.status_code, 405)
+
+
+class DatabaseHealthEndpointTests(TestCase):
+    def test_returns_ok_when_database_responds(self):
+        response = self.client.get(reverse("health-database"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok", "database": "ok"})
+
+    def test_returns_503_when_database_fails(self):
+        with mock.patch(
+            "apps.core.views.connection.cursor",
+            side_effect=OperationalError("sin conexión"),
+        ):
+            response = self.client.get(reverse("health-database"))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"status": "error", "database": "unavailable"})
 
 
 @override_settings(DEBUG=True)
