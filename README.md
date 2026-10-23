@@ -19,7 +19,7 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 .
 ├── apps/
 │   ├── audit/          # Auditoría funcional
-│   ├── core/           # Funciones transversales y health check
+│   ├── core/           # Funciones transversales y health checks
 │   ├── datasets/       # Catálogo y versiones de datasets
 │   ├── experiments/    # Experimentos y resultados
 │   ├── identity/       # Identidad, usuarios y acceso
@@ -37,7 +37,7 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 └── requirements-dev.txt
 ~~~
 
-Los módulos de dominio se dejan preparados como aplicaciones Django; sus modelos y reglas de negocio se implementarán en tareas posteriores. En esta tarea solo se implementa el endpoint transversal de comprobación de estado.
+Los módulos de dominio se dejan preparados como aplicaciones Django; sus modelos y reglas de negocio se implementarán en tareas posteriores. Por ahora solo están implementados los endpoints transversales de comprobación de estado de la aplicación y de la base de datos.
 
 ## Requisitos previos
 
@@ -88,7 +88,7 @@ docker compose exec backend python manage.py migrate
 docker compose exec backend python manage.py shell -c "from django.db import connection; connection.ensure_connection(); print('Conexión OK')"
 ~~~
 
-Si se imprime `Conexión OK` y las migraciones se aplican, el backend se conecta correctamente a PostgreSQL.
+Si se imprime `Conexión OK` y las migraciones se aplican, el backend se conecta correctamente a PostgreSQL. También puedes comprobarlo con `GET /api/v1/health/db/` (ver "Endpoints de estado").
 
 El comando `migrate` se ejecuta de forma manual y no es necesario después de cada inicio de los contenedores. Debe ejecutarse:
 
@@ -97,11 +97,11 @@ El comando `migrate` se ejecuta de forma manual y no es necesario después de ca
 
 Django registra las migraciones ya aplicadas, por lo que volver a ejecutar `migrate` cuando no hay pendientes no modifica la base de datos.
 
-Las migraciones iniciales corresponden a las aplicaciones integradas de Django. Todavía no se han definido modelos de negocio de BioGestor, por lo que no se crean tablas de datasets, modelos ni experimentos en esta tarea.
+Las migraciones iniciales corresponden a las aplicaciones integradas de Django y a `apps/core` (`0001_initial`, con el modelo técnico `IntegrationProbe` usado en las pruebas de integración). Todavía no se han definido modelos de negocio de BioGestor, por lo que no se crean tablas de datasets, modelos ni experimentos.
 
 ### 5. Acceder al backend
 
-El backend queda disponible en http://127.0.0.1:8000/ con el servidor de desarrollo de Django. No se debe usar runserver como servidor de producción.
+El backend queda disponible en http://127.0.0.1:8080/ con el servidor de desarrollo de Django (`compose.yaml` publica el puerto 8000 del contenedor en el 8080 local). No se debe usar runserver como servidor de producción.
 
 Para ver los registros del backend o detener el entorno:
 
@@ -110,7 +110,9 @@ docker compose logs -f backend
 docker compose down        # conserva los datos; con -v también los elimina
 ~~~
 
-## Endpoint de estado
+## Endpoints de estado
+
+### Estado de la aplicación
 
 ~~~http
 GET /api/v1/health/
@@ -125,15 +127,31 @@ Respuesta esperada (HTTP 200):
 }
 ~~~
 
-Este endpoint comprueba que la aplicación HTTP está respondiendo. No verifica todavía la conectividad con PostgreSQL, S3 ni BioDynamics; esas comprobaciones se añadirán cuando se definan las necesidades de disponibilidad y despliegue.
+Este endpoint solo comprueba que la aplicación HTTP está respondiendo. **No consulta PostgreSQL, a propósito**: el CI lo usa para verificar la imagen Docker sin base de datos.
 
-Ejemplo desde terminal:
+### Estado de la base de datos
+
+~~~http
+GET /api/v1/health/db/
+~~~
+
+Ejecuta una consulta mínima (`SELECT 1`) contra PostgreSQL.
+
+- **HTTP 200** si la base de datos responde.
+- **HTTP 503 Service Unavailable** si no se puede conectar o consultar.
+
+Aún no verifica S3 ni BioDynamics; esas comprobaciones se añadirán cuando se definan las necesidades de disponibilidad y despliegue.
+
+### Ejemplos desde terminal
 
 ~~~bash
-curl -i http://127.0.0.1:8000/api/v1/health/
+curl -i http://127.0.0.1:8080/api/v1/health/
+curl -i http://127.0.0.1:8080/api/v1/health/db/
 ~~~
 
 En Windows PowerShell usa `curl.exe` en lugar de `curl`.
+
+Para ver el 503, detén la base con `docker compose stop db`, repite la petición y vuelve a iniciarla con `docker compose start db`.
 
 Las solicitudes POST y otros métodos no admitidos reciben HTTP 405 Method Not Allowed.
 
@@ -147,7 +165,25 @@ docker compose exec backend ruff check .
 docker compose exec backend ruff format --check .
 ~~~
 
-La integración continua ejecuta comprobaciones de Django, pruebas, cobertura mínima del 70 % para el módulo core del endpoint y comprobaciones de Ruff. Las pruebas del health check no requieren que PostgreSQL esté disponible; ejecutar migraciones sí requiere una base de datos activa.
+Las pruebas de los health checks no requieren que PostgreSQL esté disponible (la caída de la base se simula); ejecutar migraciones sí requiere una base de datos activa.
+
+## Integración continua
+
+El flujo `.github/workflows/ci.yml` se ejecuta con GitHub Actions en cada Pull Request y push hacia `develop` o `main`, y también puede lanzarse manualmente desde la pestaña Actions (`workflow_dispatch`). Tiene dos jobs:
+
+1. **Instalación, verificación y pruebas** (con un servicio PostgreSQL 17):
+   - Instala las dependencias de `requirements-dev.txt` con Python 3.13 (versión tomada de `.python-version`).
+   - Ejecuta `ruff check` y `ruff format --check`.
+   - Compila las fuentes con `python -m compileall`.
+   - Ejecuta `python manage.py check` y verifica que no falten migraciones (`makemigrations --check --dry-run`).
+   - Aplica las migraciones sobre una base de datos PostgreSQL limpia.
+   - Ejecuta las pruebas con Coverage.py y exige una cobertura mínima del 70 %.
+2. **Compilación de imagen Docker** (solo si el job anterior pasa):
+   - Construye la imagen a partir del `Dockerfile`.
+   - Ejecuta `python manage.py check` dentro de la imagen.
+   - Levanta el backend con Gunicorn, sin base de datos, y comprueba que `GET /api/v1/health/` responda.
+
+Las credenciales del workflow son exclusivas de CI y no se deben reutilizar en otros entornos. Se recomienda configurar ambos jobs como comprobaciones obligatorias en la protección de las ramas `develop` y `main`.
 
 ## Variables de entorno
 
@@ -166,4 +202,4 @@ En un entorno que no sea de desarrollo debe configurarse una clave segura, desha
 
 ## Alcance de esta inicialización
 
-Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoint de estado, pruebas automatizadas y documentación de ejecución. No incluye todavía modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
+Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, pruebas automatizadas y documentación de ejecución. No incluye todavía modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
