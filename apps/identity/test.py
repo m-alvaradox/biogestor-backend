@@ -85,7 +85,13 @@ class UsuarioModeloTests(TestCase):
     def test_cinco_roles_definidos(self):
         self.assertEqual(
             {r.value for r in Rol},
-            {"administrador", "product_owner", "ingeniero_datos", "ml_operator", "cientifico_datos"},
+            {
+                "administrador",
+                "product_owner",
+                "ingeniero_datos",
+                "ml_operator",
+                "cientifico_datos",
+            },
         )
 
 
@@ -118,9 +124,7 @@ class MatrizPermisosTests(TestCase):
                 self.assertEqual(self.roles_con_permiso(op), set(Rol))
 
     def test_gestionar_usuarios_solo_administrador(self):
-        self.assertEqual(
-            self.roles_con_permiso(Operacion.GESTIONAR_USUARIOS), {Rol.ADMINISTRADOR}
-        )
+        self.assertEqual(self.roles_con_permiso(Operacion.GESTIONAR_USUARIOS), {Rol.ADMINISTRADOR})
 
     def test_aprobar_y_cambiar_estado_solo_admin_y_po(self):
         esperado = {Rol.ADMINISTRADOR, Rol.PRODUCT_OWNER}
@@ -253,9 +257,7 @@ class LoginTests(BaseAPITest):
     def test_login_incluye_operaciones_permitidas(self):
         r = self.login(username="cient1", password=PASSWORD)
         self.assertEqual(r.data["usuario"]["operaciones"], operaciones_de(self.cient))
-        self.assertNotIn(
-            Operacion.GESTIONAR_USUARIOS.value, r.data["usuario"]["operaciones"]
-        )
+        self.assertNotIn(Operacion.GESTIONAR_USUARIOS.value, r.data["usuario"]["operaciones"])
 
     def test_login_no_expone_password(self):
         r = self.login(username="admin1", password=PASSWORD)
@@ -418,7 +420,7 @@ class UsuarioViewSetCrudTests(BaseAPITest):
         datos.update(extra)
         return datos
 
-    # crear 
+    # crear
     def test_crear_usuario(self):
         r = self.client.post(reverse("usuario-list"), self.datos_nuevo(), format="json")
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
@@ -488,7 +490,7 @@ class UsuarioViewSetCrudTests(BaseAPITest):
         self.assertEqual(r.status_code, status.HTTP_201_CREATED)
         self.assertEqual(r.data["rol"], Rol.CIENTIFICO_DATOS)
 
-    #  leer 
+    #  leer
     def test_detalle_de_usuario(self):
         r = self.client.get(reverse("usuario-detail", args=[self.po.id]))
         self.assertEqual(r.status_code, status.HTTP_200_OK)
@@ -500,7 +502,7 @@ class UsuarioViewSetCrudTests(BaseAPITest):
         r = self.client.get(reverse("usuario-detail", args=[999999]))
         self.assertEqual(r.status_code, status.HTTP_404_NOT_FOUND)
 
-    # actualizar 
+    # actualizar
     def test_patch_cambia_rol_y_departamento(self):
         r = self.client.patch(
             reverse("usuario-detail", args=[self.cient.id]),
@@ -567,7 +569,7 @@ class UsuarioViewSetCrudTests(BaseAPITest):
         r = self.client.get(reverse("auth-perfil"))
         self.assertIn(Operacion.GESTIONAR_USUARIOS.value, r.data["operaciones"])
 
-    # eliminar (desactivar) 
+    # eliminar (desactivar)
     def test_delete_desactiva_y_no_borra(self):
         r = self.client.delete(reverse("usuario-detail", args=[self.ing.id]))
         self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
