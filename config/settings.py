@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "rest_framework.authtoken",
     "apps.core.apps.CoreConfig",
     "apps.identity.apps.IdentityConfig",
     "apps.datasets.apps.DatasetsConfig",
@@ -116,8 +117,18 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Las futuras vistas DRF requerirán autenticación de manera predeterminada.
 # Los endpoints públicos deberán declararse explícitamente.
+
 REST_FRAMEWORK = {
+    # Token primero: sin credenciales la API responde 401 (no 403).
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
 }
+
+# Usuario propio con rol (apps/identity). Debe definirse antes de crear más
+# migraciones que apunten al usuario.
+AUTH_USER_MODEL = "identity.Usuario"

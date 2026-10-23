@@ -33,9 +33,7 @@ class DatasetPersistenceTests(TestCase):
 
     def test_rechaza_uri_que_no_es_s3(self):
         with self.assertRaises(ValidationError):
-            Dataset(
-                name="X", type="audio", storage_uri="https://ejemplo.com/a.wav"
-            ).full_clean()
+            Dataset(name="X", type="audio", storage_uri="https://ejemplo.com/a.wav").full_clean()
 
     def test_no_duplica_referencia_s3(self):
         uri = "s3://biogestor-datasets/audio/p3-001.wav"
