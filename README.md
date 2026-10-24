@@ -20,13 +20,13 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 ├── apps/
 │   ├── audit/          # Auditoría funcional
 │   ├── core/           # Funciones transversales y health checks
-│   ├── datasets/       # Catálogo y versiones de datasets
+│   ├── datasets/       # Catálogo de datasets (modelo Dataset)
 │   ├── experiments/    # Experimentos y resultados
-│   ├── identity/       # Identidad, usuarios y acceso
 │   ├── integrations/   # Integración con BioDynamics
 │   ├── ml_models/      # Modelos y versiones de ML
 │   ├── observations/   # Comentarios y observaciones
-│   └── storage/        # Referencias y acceso a archivos
+│   ├── storage/        # Referencias y acceso a archivos
+│   └── users/          # Usuarios según el diagrama de clases (modelo User)
 ├── config/             # Configuración Django, URLs, ASGI y WSGI
 ├── .dockerignore       # Archivos excluidos de la imagen de Docker
 ├── .env.example        # Variables de ejemplo; no contiene secretos reales
@@ -37,7 +37,7 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 └── requirements-dev.txt
 ~~~
 
-Los módulos de dominio se dejan preparados como aplicaciones Django; sus modelos y reglas de negocio se implementarán en tareas posteriores. Por ahora solo están implementados los endpoints transversales de comprobación de estado de la aplicación y de la base de datos.
+Los módulos de dominio se dejan preparados como aplicaciones Django y sus modelos se implementan por tareas. Ya están implementados `users` (modelo `User`) y `datasets` (modelo `Dataset`), además de los endpoints transversales de comprobación de estado de la aplicación y de la base de datos. El resto de módulos se implementará en tareas posteriores.
 
 ## Requisitos previos
 
@@ -92,12 +92,12 @@ Si se imprime `Conexión OK` y las migraciones se aplican, el backend se conecta
 
 El comando `migrate` se ejecuta de forma manual y no es necesario después de cada inicio de los contenedores. Debe ejecutarse:
 
-- Al inicializar la base de datos por primera vez (por ejemplo, tras clonar el repositorio o después de `docker compose down -v`, que elimina los datos).
+- Al inicializar la base de datos por primera vez (por ejemplo, tras clonar el repositorio).
 - Cuando existan nuevas migraciones pendientes, por ejemplo después de actualizar la rama con cambios que incluyan migraciones.
 
 Django registra las migraciones ya aplicadas, por lo que volver a ejecutar `migrate` cuando no hay pendientes no modifica la base de datos.
 
-Las migraciones iniciales corresponden a las aplicaciones integradas de Django y a `apps/core` (`0001_initial`, con el modelo técnico `IntegrationProbe` usado en las pruebas de integración). Todavía no se han definido modelos de negocio de BioGestor, por lo que no se crean tablas de datasets, modelos ni experimentos.
+Las migraciones incluyen las aplicaciones integradas de Django, `apps/core` (`0001_initial`, con el modelo técnico `IntegrationProbe` usado en las pruebas de integración), `apps/users` (`0001_initial`, tabla de usuarios) y `apps/datasets` (`0001_initial`, tabla de datasets). `datasets` depende de `users`, y Django las aplica en ese orden.
 
 ### 5. Acceder al backend
 
@@ -107,8 +107,10 @@ Para ver los registros del backend o detener el entorno:
 
 ~~~bash
 docker compose logs -f backend
-docker compose down        # conserva los datos; con -v también los elimina
+docker compose down        # detiene los contenedores y conserva los datos
 ~~~
+
+No uses `docker compose down -v` como solución general: elimina el volumen de PostgreSQL y todos sus datos.
 
 ## Endpoints de estado
 
@@ -155,6 +157,38 @@ Para ver el 503, detén la base con `docker compose stop db`, repite la petició
 
 Las solicitudes POST y otros métodos no admitidos reciben HTTP 405 Method Not Allowed.
 
+## Modelos de dominio
+
+### Dataset (`apps/datasets`)
+
+Representa un conjunto de datos registrado en BioGestor. **BioGestor no sube ni copia archivos**: solo guarda la referencia a un objeto o carpeta que ya existe en S3, junto con su metadata.
+
+| Campo | Tipo | Obligatorio | Regla |
+| --- | --- | --- | --- |
+| `name` | texto (150) | sí | |
+| `type` | `DatasetType` | sí | audio, image, video, csv, text, other |
+| `status` | `Status` | no | active (por defecto), processing, archived, error |
+| `owner` | → `users.User` | no | no se puede borrar un usuario que tiene datasets |
+| `capture_date` | fecha | no | si se registra, no puede ser futura |
+| `s3_uri` | texto (1024) | no | no se puede repetir la misma referencia |
+| `farm`, `pool`, `species`, `license`, `description` | texto | no | |
+| `file_format`, `size_bytes`, `file_count`, `type_metadata` | varios | no | `type_metadata` guarda datos propios de cada tipo (JSON) |
+| `created_at`, `updated_at` | fecha y hora | automáticos | |
+
+La fecha de captura y la referencia única de S3 se validan con `full_clean()` y también como restricciones en PostgreSQL. Django no ejecuta `full_clean()` al llamar a `save()`, por lo que los formularios y la futura API deben llamarlo antes de guardar.
+
+### User (`apps/users`)
+
+Usuario según el diagrama de clases. Es un modelo de dominio: **no** reemplaza el usuario de autenticación de Django (`AUTH_USER_MODEL`) ni incluye login, permisos o endpoints; eso corresponde a otra tarea.
+
+| Campo | Tipo | Obligatorio | Regla |
+| --- | --- | --- | --- |
+| `name` | texto (150) | sí | |
+| `email` | correo | sí | único |
+| `role` | `UserRole` | no | por ahora solo `administrator` (por defecto) |
+| `dept` | texto (100) | no | |
+| `status` | `UserStatus` | no | active (por defecto), inactive |
+
 ## Pruebas y calidad
 
 ~~~bash
@@ -165,7 +199,7 @@ docker compose exec backend ruff check .
 docker compose exec backend ruff format --check .
 ~~~
 
-Las pruebas de los health checks no requieren que PostgreSQL esté disponible (la caída de la base se simula); ejecutar migraciones sí requiere una base de datos activa.
+Las pruebas de los health checks no requieren que PostgreSQL esté disponible (la caída de la base se simula); ejecutar migraciones sí requiere una base de datos activa. Las pruebas de `users` y `datasets` usan la base temporal que crea el test runner de Django.
 
 ## Integración continua
 
@@ -200,6 +234,6 @@ Las credenciales del workflow son exclusivas de CI y no se deben reutilizar en o
 
 En un entorno que no sea de desarrollo debe configurarse una clave segura, deshabilitar DJANGO_DEBUG y ajustar los hosts permitidos.
 
-## Alcance de esta inicialización
+## Alcance actual
 
-Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, pruebas automatizadas y documentación de ejecución. No incluye todavía modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
+Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, los modelos de dominio `User` y `Dataset` con sus migraciones, pruebas automatizadas y documentación de ejecución. No incluye todavía el resto de modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
