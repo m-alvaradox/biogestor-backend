@@ -2,13 +2,11 @@
 
 API backend de BioGestor, desarrollado con Django y Django REST Framework. PostgreSQL es la base de datos de persistencia y Amazon S3 será el almacenamiento de los archivos de datasets cuando se implemente ese módulo.
 
-Estado actual: ya están implementados los endpoints de estado, la **identidad de usuarios con cinco roles y matriz de permisos** (`apps/identity`) y el **modelo base del catálogo de datasets** (`apps/datasets`). El resto de módulos de dominio sigue como estructura preparada.
-
 ## Stack inicial
 
 - Python 3.13.
 - Django 5.2.17.
-- Django REST Framework 3.18.3, con autenticación por token (`rest_framework.authtoken`).
+- Django REST Framework 3.18.3.
 - PostgreSQL mediante Psycopg 3.
 - Configuración local desde variables de entorno.
 - Pruebas con el test runner de Django, cobertura con Coverage.py y estilo con Ruff.
@@ -20,15 +18,15 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 ~~~text
 .
 ├── apps/
-│   ├── audit/          # Auditoría funcional (pendiente)
+│   ├── audit/          # Auditoría funcional
 │   ├── core/           # Funciones transversales y health checks
-│   ├── datasets/       # Catálogo de datasets (modelo Dataset implementado; versiones pendientes)
-│   ├── experiments/    # Experimentos y resultados (pendiente)
-│   ├── identity/       # Usuarios, roles, login y matriz de permisos
-│   ├── integrations/   # Integración con BioDynamics (pendiente)
-│   ├── ml_models/      # Modelos y versiones de ML (pendiente)
-│   ├── observations/   # Comentarios y observaciones (pendiente)
-│   └── storage/        # Referencias y acceso a archivos (pendiente)
+│   ├── datasets/       # Catálogo de datasets (modelo Dataset)
+│   ├── experiments/    # Experimentos y resultados
+│   ├── integrations/   # Integración con BioDynamics
+│   ├── ml_models/      # Modelos y versiones de ML
+│   ├── observations/   # Comentarios y observaciones
+│   ├── storage/        # Referencias y acceso a archivos
+│   └── users/          # Usuarios según el diagrama de clases (modelo User)
 ├── config/             # Configuración Django, URLs, ASGI y WSGI
 ├── .dockerignore       # Archivos excluidos de la imagen de Docker
 ├── .env.example        # Variables de ejemplo; no contiene secretos reales
@@ -38,6 +36,8 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 ├── requirements.txt
 └── requirements-dev.txt
 ~~~
+
+Los módulos de dominio se dejan preparados como aplicaciones Django y sus modelos se implementan por tareas. Ya están implementados `users` (modelo `User`) y `datasets` (modelo `Dataset`), además de los endpoints transversales de comprobación de estado de la aplicación y de la base de datos. El resto de módulos se implementará en tareas posteriores.
 
 ## Requisitos previos
 
@@ -92,24 +92,14 @@ Si se imprime `Conexión OK` y las migraciones se aplican, el backend se conecta
 
 El comando `migrate` se ejecuta de forma manual y no es necesario después de cada inicio de los contenedores. Debe ejecutarse:
 
-- Al inicializar la base de datos por primera vez (por ejemplo, tras clonar el repositorio o después de `docker compose down -v`, que elimina los datos).
+- Al inicializar la base de datos por primera vez (por ejemplo, tras clonar el repositorio).
 - Cuando existan nuevas migraciones pendientes, por ejemplo después de actualizar la rama con cambios que incluyan migraciones.
 
 Django registra las migraciones ya aplicadas, por lo que volver a ejecutar `migrate` cuando no hay pendientes no modifica la base de datos.
 
-Las migraciones corresponden a las aplicaciones integradas de Django, `apps/core` (`IntegrationProbe`, modelo técnico de las pruebas de integración), `apps/identity` (`Usuario`) y `apps/datasets` (`Dataset`).
+Las migraciones incluyen las aplicaciones integradas de Django, `apps/core` (`0001_initial`, con el modelo técnico `IntegrationProbe` usado en las pruebas de integración), `apps/users` (`0001_initial`, tabla de usuarios) y `apps/datasets` (`0001_initial`, tabla de datasets). `datasets` depende de `users`, y Django las aplica en ese orden.
 
-> **Importante:** el proyecto usa un modelo de usuario propio (`AUTH_USER_MODEL = "identity.Usuario"`). Si tu base local se migró antes de que existiera `apps/identity`, las tablas de usuarios quedaron con el modelo por defecto de Django y las migraciones fallarán. Reinicia la base con `docker compose down -v` y vuelve a ejecutar `migrate`.
-
-### 5. Crear el primer Administrador
-
-~~~bash
-docker compose exec backend python manage.py createsuperuser
-~~~
-
-El superusuario se crea con el rol **Administrador** y puede crear a los demás usuarios desde la API (`/usuarios/`) o desde el panel de Django (`/admin/`).
-
-### 6. Acceder al backend
+### 5. Acceder al backend
 
 El backend queda disponible en http://127.0.0.1:8080/ con el servidor de desarrollo de Django (`compose.yaml` publica el puerto 8000 del contenedor en el 8080 local). No se debe usar runserver como servidor de producción.
 
@@ -117,8 +107,10 @@ Para ver los registros del backend o detener el entorno:
 
 ~~~bash
 docker compose logs -f backend
-docker compose down        # conserva los datos; con -v también los elimina
+docker compose down        # detiene los contenedores y conserva los datos
 ~~~
+
+No uses `docker compose down -v` como solución general: elimina el volumen de PostgreSQL y todos sus datos.
 
 ## Endpoints de estado
 
@@ -165,116 +157,37 @@ Para ver el 503, detén la base con `docker compose stop db`, repite la petició
 
 Las solicitudes POST y otros métodos no admitidos reciben HTTP 405 Method Not Allowed.
 
-## Identidad, roles y permisos
+## Modelos de dominio
 
-El módulo `apps/identity` define el modelo `Usuario` (extiende `AbstractUser`) con correo único, `rol` y `departamento`. El estado activo/inactivo usa el campo `is_active` de Django. El rol vive en BioGestor y no en el proveedor de login, para que un futuro inicio de sesión con cuentas de BioDynamics no cambie los permisos.
+### Dataset (`apps/datasets`)
 
-### Roles
+Representa un conjunto de datos registrado en BioGestor. **BioGestor no sube ni copia archivos**: solo guarda la referencia a un objeto o carpeta que ya existe en S3, junto con su metadata.
 
-| Valor | Nombre |
-| --- | --- |
-| `administrador` | Administrador |
-| `product_owner` | Product Owner |
-| `ingeniero_datos` | Ingeniero de Datos |
-| `ml_operator` | Machine Learning Operator |
-| `cientifico_datos` | Científico de Datos |
-
-El rol por defecto de un usuario nuevo es `cientifico_datos`, el de menos permisos.
-
-### Matriz de permisos
-
-La matriz está definida en un único archivo, `apps/identity/permisos.py`; las vistas solo declaran qué operación realizan. No existe una operación para modificar la auditoría: nadie puede hacerlo.
-
-| Operación | Admin | PO | Ing. Datos | ML Operator | Científico |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| Consultar datasets | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Consultar modelos y versiones | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Comparar modelos | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Registrar observaciones | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Registrar datasets | ✓ |  | ✓ |  |  |
-| Modificar metadatos | ✓ |  | ✓ |  |  |
-| Registrar versiones de modelos | ✓ |  | ✓ |  |  |
-| Monitorear integración API | ✓ |  | ✓ |  |  |
-| Configurar almacenamiento | ✓ |  | ✓ |  |  |
-| Aprobar o rechazar modelos | ✓ | ✓ |  |  |  |
-| Cambiar estado de modelos | ✓ | ✓ |  |  |  |
-| Ejecutar o solicitar pruebas | ✓ | ✓ |  | ✓ |  |
-| Consultar auditoría | ✓ | ✓ | ✓ |  |  |
-| Gestionar usuarios y roles | ✓ |  |  |  |  |
-
-Decisiones pendientes de confirmar con el Product Owner (anotadas en `permisos.py`):
-
-- El alcance del permiso «Limitado» del Ingeniero de Datos sobre el cambio de estado de modelos.
-- Quién puede registrar observaciones: hoy se permite a todos los roles (RF-14 / HU-09).
-- Qué registros de auditoría ve cada rol: el filtro se aplicará en la vista de auditoría.
-
-### Cómo proteger una vista
-
-~~~python
-from apps.identity.permisos import Operacion, PermisoPorMetodo, requiere
-
-# Una sola operación
-permission_classes = [requiere(Operacion.GESTIONAR_USUARIOS)]
-
-# Operación distinta según el método HTTP
-permission_classes = [PermisoPorMetodo]
-operaciones = {
-    "GET": Operacion.CONSULTAR_DATASETS,
-    "POST": Operacion.REGISTRAR_DATASETS,
-    "PATCH": Operacion.MODIFICAR_METADATOS,
-}
-~~~
-
-Un método HTTP que no esté declarado en `operaciones` se rechaza. `HEAD` y `OPTIONS` se tratan como `GET`.
-
-## Endpoints de autenticación y usuarios
-
-La autenticación usa tokens de DRF: después del login se envía el encabezado `Authorization: Token <token>`.
-
-| Método | Ruta | Descripción | Acceso |
+| Campo | Tipo | Obligatorio | Regla |
 | --- | --- | --- | --- |
-| POST | `auth/login/` | Recibe `username` y `password`; devuelve `token` y el perfil. | Público |
-| POST | `auth/logout/` | Borra el token del usuario (HTTP 204). | Autenticado |
-| GET | `auth/perfil/` | Perfil del usuario autenticado, con su lista de `operaciones` permitidas. | Autenticado |
-| GET, POST | `usuarios/` | Lista (filtros `rol` y `departamento`) y crea usuarios. | Administrador |
-| GET, PUT, PATCH, DELETE | `usuarios/<id>/` | Detalle, edición y baja de un usuario. | Administrador |
+| `name` | texto (150) | sí | |
+| `type` | `DatasetType` | sí | audio, image, video, csv, text, other |
+| `status` | `Status` | no | active (por defecto), processing, archived, error |
+| `owner` | → `users.User` | no | no se puede borrar un usuario que tiene datasets |
+| `capture_date` | fecha | no | si se registra, no puede ser futura |
+| `s3_uri` | texto (1024) | no | no se puede repetir la misma referencia |
+| `farm`, `pool`, `species`, `license`, `description` | texto | no | |
+| `file_format`, `size_bytes`, `file_count`, `type_metadata` | varios | no | `type_metadata` guarda datos propios de cada tipo (JSON) |
+| `created_at`, `updated_at` | fecha y hora | automáticos | |
 
-Detalles de comportamiento:
+La fecha de captura y la referencia única de S3 se validan con `full_clean()` y también como restricciones en PostgreSQL. Django no ejecuta `full_clean()` al llamar a `save()`, por lo que los formularios y la futura API deben llamarlo antes de guardar.
 
-- Credenciales incorrectas o cuenta inactiva devuelven **HTTP 400** con `{"detail": "Usuario o contraseña incorrectos."}`.
-- Un login repetido reutiliza el mismo token.
-- `DELETE /usuarios/<id>/` **no borra** al usuario: lo desactiva (`is_active = false`) y revoca su token, porque puede ser propietario de datasets y aparecer en la auditoría.
-- La contraseña se guarda cifrada, tiene mínimo 8 caracteres, es obligatoria al crear y opcional al editar. Nunca se devuelve en las respuestas.
-- El perfil es de solo lectura; un usuario no puede cambiar su propio rol.
-- `operaciones` en el perfil permite al frontend mostrar u ocultar botones. La autorización real siempre se valida en el backend.
+### User (`apps/users`)
 
-~~~bash
-# Iniciar sesión
-curl -X POST http://127.0.0.1:8080/api/v1/auth/login/ \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin1", "password": "ClaveSegura123"}'
+Usuario según el diagrama de clases. Es un modelo de dominio: **no** reemplaza el usuario de autenticación de Django (`AUTH_USER_MODEL`) ni incluye login, permisos o endpoints; eso corresponde a otra tarea.
 
-# Usar el token
-curl http://127.0.0.1:8080/api/v1/auth/perfil/ \
-  -H "Authorization: Token <token>"
-~~~
-
-## Catálogo de datasets
-
-El modelo `Dataset` (`apps/datasets`) representa un conjunto de datos registrado. **BioGestor no sube ni copia archivos**: solo guarda la referencia a un objeto o carpeta que ya existe en S3, más su metadata.
-
-- **Obligatorios:** `nombre` y `tipo` (`audio`, `imagen`, `video`, `csv`, `texto`, `otro`).
-- **Listado:** `propietario` (investigador responsable, `PROTECT`), `estado` (`activo`, `procesando`, `archivado`, `error`), `fecha_registro`, `fecha_actualizacion`.
-- **Metadatos:** `descripcion`, `especie`, `granja`, `piscina`, `fecha_captura`, `licencia` y `metadatos_tipo` (JSON para campos que dependen del tipo, como micrófono o frecuencia de muestreo).
-- **Almacenamiento:** `ubicacion_s3`, `formato`, `tamano_bytes`, `cantidad_archivos`.
-
-Restricciones en PostgreSQL:
-
-- `ubicacion_s3` debe empezar con `s3://` (o estar vacía mientras no se conozca).
-- La misma `ubicacion_s3` no puede registrarse dos veces; varios datasets sin referencia sí son válidos.
-- `fecha_captura` no puede ser futura.
-
-Todavía no hay endpoints de datasets, ni la separación `Dataset` / `DatasetVersion` definida en el modelo de datos preliminar. Ambos se implementarán en tareas posteriores.
+| Campo | Tipo | Obligatorio | Regla |
+| --- | --- | --- | --- |
+| `name` | texto (150) | sí | |
+| `email` | correo | sí | único |
+| `role` | `UserRole` | no | por ahora solo `administrator` (por defecto) |
+| `dept` | texto (100) | no | |
+| `status` | `UserStatus` | no | active (por defecto), inactive |
 
 ## Pruebas y calidad
 
@@ -286,16 +199,7 @@ docker compose exec backend ruff check .
 docker compose exec backend ruff format --check .
 ~~~
 
-Las pruebas de los health checks no requieren que PostgreSQL esté disponible (la caída de la base se simula); ejecutar migraciones y las pruebas de modelos sí requiere una base de datos activa.
-
-Para ejecutar solo un módulo:
-
-~~~bash
-docker compose exec backend python manage.py test apps.identity
-docker compose exec backend python manage.py test apps.datasets
-~~~
-
-Las pruebas de `identity` cubren el modelo, la matriz de permisos por rol, las clases de permiso de DRF, login, logout, perfil y el CRUD de usuarios con sus filtros.
+Las pruebas de los health checks no requieren que PostgreSQL esté disponible (la caída de la base se simula); ejecutar migraciones sí requiere una base de datos activa. Las pruebas de `users` y `datasets` usan la base temporal que crea el test runner de Django.
 
 ## Integración continua
 
@@ -330,19 +234,6 @@ Las credenciales del workflow son exclusivas de CI y no se deben reutilizar en o
 
 En un entorno que no sea de desarrollo debe configurarse una clave segura, deshabilitar DJANGO_DEBUG y ajustar los hosts permitidos.
 
-## Contribución
+## Alcance actual
 
-Las ramas, commits, Pull Requests y revisiones siguen [CONTRIBUTING.md](CONTRIBUTING.md). En resumen: se trabaja desde `develop` con ramas `feature/*`, `fix/*` y `chore/*`; no hay push directo a `main` ni `develop`; cada PR necesita aprobación de otro integrante y del CODEOWNER, y los endpoints nuevos llevan pruebas automatizadas.
-
-## Alcance actual y pendientes
-
-**Incluye:** proyecto Django, estructura modular, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado, autenticación por token, usuarios con cinco roles, matriz de permisos, modelo `Dataset` con sus restricciones, pruebas automatizadas y documentación de ejecución.
-
-**No incluye todavía:**
-
-- Endpoints del catálogo de datasets y separación `Dataset` / `DatasetVersion`.
-- Modelos, versiones, experimentos, observaciones y auditoría.
-- Integración real con S3.
-- Contrato de ingesta de BioDynamics y autorización del servicio que envía resultados.
-- Inicio de sesión con cuentas de BioDynamics (el rol ya vive en `Usuario` para facilitarlo).
-- Despliegue de producción.
+Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, los modelos de dominio `User` y `Dataset` con sus migraciones, pruebas automatizadas y documentación de ejecución. No incluye todavía el resto de modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
