@@ -11,7 +11,15 @@ quote-style = "double"
 
 [tool.coverage.run]
 branch = true
-source = ["apps.core.views", "apps.core.models", "apps.datasets.models", "apps.users.models"]
+source = [
+    "apps.core.views",
+    "apps.core.models",
+    "apps.datasets.models",
+    "apps.datasets.pagination",
+    "apps.datasets.serializers",
+    "apps.datasets.views",
+    "apps.users.models",
+]
 
 [tool.coverage.report]
 show_missing = true
