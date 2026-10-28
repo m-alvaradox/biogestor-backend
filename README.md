@@ -157,6 +157,54 @@ Para ver el 503, detén la base con `docker compose stop db`, repite la petició
 
 Las solicitudes POST y otros métodos no admitidos reciben HTTP 405 Method Not Allowed.
 
+## Catálogo de datasets
+
+~~~http
+GET /api/v1/datasets/
+~~~
+
+Lista los datasets registrados en PostgreSQL, paginados y ordenados del más reciente al más antiguo. Por ahora no requiere autenticación; se protegerá cuando exista el login de BioGestor.
+
+| Parámetro | Descripción |
+| --- | --- |
+| `page` | Número de página (por defecto 1). Una página inexistente responde 404. |
+| `page_size` | Resultados por página (por defecto 10, máximo 100). |
+| `search` | Busca en nombre, descripción y especie, sin distinguir mayúsculas. |
+| `type` | `audio`, `image`, `video`, `csv`, `text` u `other`. |
+| `status` | `active`, `processing`, `archived` o `error`. |
+| `owner` | Id del responsable. |
+| `ordering` | `name`, `created_at`, `capture_date` o `type`; con `-` delante es descendente. Por defecto `-created_at`. |
+
+Todos los parámetros son opcionales y se pueden combinar. Un valor no válido en `type`, `status` u `owner` responde HTTP 400 indicando el parámetro.
+
+Respuesta (HTTP 200):
+
+~~~json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "name": "Cantos de aves",
+      "type": "audio",
+      "status": "active",
+      "owner": 3,
+      "created_at": "2026-10-20T15:30:00Z"
+    }
+  ]
+}
+~~~
+
+`owner` es el id del usuario responsable o `null` si el dataset no tiene uno.
+
+~~~bash
+curl -i http://127.0.0.1:8080/api/v1/datasets/
+curl -i "http://127.0.0.1:8080/api/v1/datasets/?type=audio&ordering=name&page_size=5"
+curl -i "http://127.0.0.1:8080/api/v1/datasets/?search=camaron"
+~~~
+
 ## Modelos de dominio
 
 ### Dataset (`apps/datasets`)
@@ -236,4 +284,4 @@ En un entorno que no sea de desarrollo debe configurarse una clave segura, desha
 
 ## Alcance actual
 
-Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, los modelos de dominio `User` y `Dataset` con sus migraciones, pruebas automatizadas y documentación de ejecución. No incluye todavía el resto de modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
+Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, los modelos de dominio `User` y `Dataset` con sus migraciones, el endpoint de catálogo de datasets, pruebas automatizadas y documentación de ejecución. No incluye todavía el resto de modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
