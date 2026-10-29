@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.urls import reverse
 from django.utils import timezone
@@ -9,13 +9,14 @@ from apps.users.models import User
 from .models import Dataset
 
 
+def create_dataset(name, **fields):
+    fields.setdefault("type", Dataset.DatasetType.AUDIO)
+    return Dataset.objects.create(name=name, **fields)
+
+
 class DatasetListEndpointTests(APITestCase):
     def setUp(self):
         self.url = reverse("dataset-list")
-
-    def create_dataset(self, name, **fields):
-        fields.setdefault("type", Dataset.DatasetType.AUDIO)
-        return Dataset.objects.create(name=name, **fields)
 
     def names(self, response):
         return [item["name"] for item in response.json()["results"]]
@@ -29,10 +30,10 @@ class DatasetListEndpointTests(APITestCase):
             {"count": 0, "next": None, "previous": None, "results": []},
         )
 
-    def test_returns_list_fields_with_owner_id_or_null(self):
+    def test_returns_list_fields_with_owner_summary_or_null(self):
         owner = User.objects.create(name="Ana Pérez", email="ana@example.com")
-        with_owner = self.create_dataset("Cantos de aves", owner=owner)
-        without_owner = self.create_dataset(
+        with_owner = create_dataset("Cantos de aves", owner=owner)
+        without_owner = create_dataset(
             "Fotos de estanques",
             type=Dataset.DatasetType.IMAGE,
             status=Dataset.Status.PROCESSING,
@@ -46,14 +47,14 @@ class DatasetListEndpointTests(APITestCase):
             set(results[with_owner.id]),
             {"id", "name", "type", "status", "owner", "created_at"},
         )
-        self.assertEqual(results[with_owner.id]["owner"], owner.id)
+        self.assertEqual(results[with_owner.id]["owner"], {"id": owner.id, "name": "Ana Pérez"})
         self.assertIsNone(results[without_owner.id]["owner"])
         self.assertEqual(results[without_owner.id]["type"], "image")
         self.assertEqual(results[without_owner.id]["status"], "processing")
 
     def test_orders_by_newest_first_by_default(self):
-        older = self.create_dataset("Antiguo")
-        newer = self.create_dataset("Reciente")
+        older = create_dataset("Antiguo")
+        newer = create_dataset("Reciente")
         Dataset.objects.filter(pk=older.pk).update(created_at=timezone.now() - timedelta(days=1))
 
         response = self.client.get(self.url)
@@ -62,7 +63,7 @@ class DatasetListEndpointTests(APITestCase):
 
     def test_orders_by_requested_field(self):
         for name in ["Bravo", "Alfa", "Charlie"]:
-            self.create_dataset(name)
+            create_dataset(name)
 
         ascending = self.client.get(self.url, {"ordering": "name"})
         descending = self.client.get(self.url, {"ordering": "-name"})
@@ -72,7 +73,7 @@ class DatasetListEndpointTests(APITestCase):
 
     def test_paginates_ten_results_by_default(self):
         for index in range(12):
-            self.create_dataset(f"Dataset {index}")
+            create_dataset(f"Dataset {index}")
 
         response = self.client.get(self.url)
         body = response.json()
@@ -84,7 +85,7 @@ class DatasetListEndpointTests(APITestCase):
 
     def test_accepts_page_and_page_size(self):
         for index in range(5):
-            self.create_dataset(f"Dataset {index}")
+            create_dataset(f"Dataset {index}")
 
         response = self.client.get(self.url, {"page": 2, "page_size": 2})
         body = response.json()
@@ -103,17 +104,17 @@ class DatasetListEndpointTests(APITestCase):
         self.assertEqual(len(response.json()["results"]), 100)
 
     def test_returns_404_for_a_page_that_does_not_exist(self):
-        self.create_dataset("Único")
+        create_dataset("Único")
 
         response = self.client.get(self.url, {"page": 5})
 
         self.assertEqual(response.status_code, 404)
 
     def test_searches_name_description_and_species(self):
-        self.create_dataset("Camarón juvenil")
-        self.create_dataset("Audio nocturno", description="Grabación de camarones")
-        self.create_dataset("Muestras", species="Camarón blanco")
-        self.create_dataset("Tilapia")
+        create_dataset("Camarón juvenil")
+        create_dataset("Audio nocturno", description="Grabación de camarones")
+        create_dataset("Muestras", species="Camarón blanco")
+        create_dataset("Tilapia")
 
         response = self.client.get(self.url, {"search": "camar"})
 
@@ -122,13 +123,13 @@ class DatasetListEndpointTests(APITestCase):
 
     def test_filters_by_type_status_and_owner(self):
         owner = User.objects.create(name="Luis Mora", email="luis@example.com")
-        self.create_dataset("Imagen activa", type=Dataset.DatasetType.IMAGE, owner=owner)
-        self.create_dataset(
+        create_dataset("Imagen activa", type=Dataset.DatasetType.IMAGE, owner=owner)
+        create_dataset(
             "Imagen archivada",
             type=Dataset.DatasetType.IMAGE,
             status=Dataset.Status.ARCHIVED,
         )
-        self.create_dataset("Audio activo")
+        create_dataset("Audio activo")
 
         by_type = self.client.get(self.url, {"type": "image"})
         by_status = self.client.get(self.url, {"status": "archived"})
@@ -155,3 +156,130 @@ class DatasetListEndpointTests(APITestCase):
         response = self.client.post(self.url, {"name": "Nuevo", "type": "audio"})
 
         self.assertEqual(response.status_code, 405)
+
+
+class DatasetDetailEndpointTests(APITestCase):
+    def url(self, pk):
+        return reverse("dataset-detail", args=[pk])
+
+    def test_returns_each_requested_dataset(self):
+        owner = User.objects.create(name="Ana Lima", email="ana@example.com")
+        audio = create_dataset(
+            "Lote de audio de tilapia 001",
+            owner=owner,
+            species="Tilapia (Oreochromis niloticus)",
+            farm="Aquamar Norte",
+            pool="Piscina A-3",
+            capture_date=date(2024, 10, 12),
+            type_metadata={"microphone": "Hidrófono DolphinEar DE200", "sample_rate": 44100},
+            s3_uri="s3://biogestor-data/tilapia/audio/batch-001/",
+            file_format=".WAV",
+            size_bytes=4_700_000_000,
+            file_count=1247,
+        )
+        image = create_dataset(
+            "Fotos de estanques",
+            type=Dataset.DatasetType.IMAGE,
+            status=Dataset.Status.ARCHIVED,
+            species="Penaeus vannamei",
+        )
+
+        audio_body = self.client.get(self.url(audio.pk)).json()
+        image_body = self.client.get(self.url(image.pk)).json()
+
+        self.assertEqual(audio_body["id"], audio.pk)
+        self.assertEqual(audio_body["name"], "Lote de audio de tilapia 001")
+        self.assertEqual(audio_body["owner"], {"id": owner.id, "name": "Ana Lima"})
+        self.assertEqual(audio_body["capture_date"], "2024-10-12")
+        self.assertEqual(audio_body["type_metadata"]["sample_rate"], 44100)
+        self.assertEqual(
+            audio_body["storage"],
+            {
+                "s3_uri": "s3://biogestor-data/tilapia/audio/batch-001/",
+                "file_format": ".WAV",
+                "size_bytes": 4_700_000_000,
+                "file_count": 1247,
+            },
+        )
+        self.assertEqual(image_body["id"], image.pk)
+        self.assertEqual(image_body["type"], "image")
+        self.assertEqual(image_body["status"], "archived")
+        self.assertEqual(image_body["species"], "Penaeus vannamei")
+
+    def test_returns_only_prototype_fields(self):
+        dataset = create_dataset("Cantos de aves")
+
+        response = self.client.get(self.url(dataset.pk))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            set(response.json()),
+            {
+                "id",
+                "name",
+                "type",
+                "status",
+                "owner",
+                "created_at",
+                "species",
+                "farm",
+                "pool",
+                "capture_date",
+                "type_metadata",
+                "storage",
+            },
+        )
+
+    def test_includes_every_list_field(self):
+        dataset = create_dataset("Cantos de aves")
+
+        list_item = self.client.get(reverse("dataset-list")).json()["results"][0]
+        detail = self.client.get(self.url(dataset.pk)).json()
+
+        self.assertLessEqual(set(list_item), set(detail))
+        for field in list_item:
+            with self.subTest(field=field):
+                self.assertEqual(detail[field], list_item[field])
+
+    def test_returns_null_for_empty_optional_fields(self):
+        dataset = create_dataset("Solo obligatorios", status=None)
+
+        body = self.client.get(self.url(dataset.pk)).json()
+
+        for field in [
+            "status",
+            "owner",
+            "species",
+            "farm",
+            "pool",
+            "capture_date",
+            "type_metadata",
+        ]:
+            with self.subTest(field=field):
+                self.assertIsNone(body[field])
+        self.assertEqual(
+            body["storage"],
+            {"s3_uri": None, "file_format": None, "size_bytes": None, "file_count": None},
+        )
+
+    def test_returns_404_for_a_dataset_that_does_not_exist(self):
+        response = self.client.get(self.url(999999))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_is_available_without_authentication(self):
+        dataset = create_dataset("Cantos de aves")
+
+        response = self.client.get(self.url(dataset.pk))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_rejects_write_methods(self):
+        dataset = create_dataset("Cantos de aves")
+
+        for method in ["post", "put", "patch", "delete"]:
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(self.url(dataset.pk), {})
+
+                self.assertEqual(response.status_code, 405)
+        self.assertTrue(Dataset.objects.filter(pk=dataset.pk).exists())
