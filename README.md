@@ -19,14 +19,14 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 .
 ├── apps/
 │   ├── audit/          # Auditoría funcional
-│   ├── core/           # Funciones transversales y health check
-│   ├── datasets/       # Catálogo y versiones de datasets
+│   ├── core/           # Funciones transversales y health checks
+│   ├── datasets/       # Catálogo de datasets (modelo Dataset)
 │   ├── experiments/    # Experimentos y resultados
-│   ├── identity/       # Identidad, usuarios y acceso
 │   ├── integrations/   # Integración con BioDynamics
 │   ├── ml_models/      # Modelos y versiones de ML
 │   ├── observations/   # Comentarios y observaciones
-│   └── storage/        # Referencias y acceso a archivos
+│   ├── storage/        # Referencias y acceso a archivos
+│   └── users/          # Usuarios según el diagrama de clases (modelo User)
 ├── config/             # Configuración Django, URLs, ASGI y WSGI
 ├── .dockerignore       # Archivos excluidos de la imagen de Docker
 ├── .env.example        # Variables de ejemplo; no contiene secretos reales
@@ -37,7 +37,7 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 └── requirements-dev.txt
 ~~~
 
-Los módulos de dominio se dejan preparados como aplicaciones Django; sus modelos y reglas de negocio se implementarán en tareas posteriores. En esta tarea solo se implementa el endpoint transversal de comprobación de estado.
+Los módulos de dominio se dejan preparados como aplicaciones Django y sus modelos se implementan por tareas. Ya están implementados `users` (modelo `User`) y `datasets` (modelo `Dataset`), además de los endpoints transversales de comprobación de estado de la aplicación y de la base de datos. El resto de módulos se implementará en tareas posteriores.
 
 ## Requisitos previos
 
@@ -88,29 +88,33 @@ docker compose exec backend python manage.py migrate
 docker compose exec backend python manage.py shell -c "from django.db import connection; connection.ensure_connection(); print('Conexión OK')"
 ~~~
 
-Si se imprime `Conexión OK` y las migraciones se aplican, el backend se conecta correctamente a PostgreSQL.
+Si se imprime `Conexión OK` y las migraciones se aplican, el backend se conecta correctamente a PostgreSQL. También puedes comprobarlo con `GET /api/v1/health/db/` (ver "Endpoints de estado").
 
 El comando `migrate` se ejecuta de forma manual y no es necesario después de cada inicio de los contenedores. Debe ejecutarse:
 
-- Al inicializar la base de datos por primera vez (por ejemplo, tras clonar el repositorio o después de `docker compose down -v`, que elimina los datos).
+- Al inicializar la base de datos por primera vez (por ejemplo, tras clonar el repositorio).
 - Cuando existan nuevas migraciones pendientes, por ejemplo después de actualizar la rama con cambios que incluyan migraciones.
 
 Django registra las migraciones ya aplicadas, por lo que volver a ejecutar `migrate` cuando no hay pendientes no modifica la base de datos.
 
-Las migraciones iniciales corresponden a las aplicaciones integradas de Django. Todavía no se han definido modelos de negocio de BioGestor, por lo que no se crean tablas de datasets, modelos ni experimentos en esta tarea.
+Las migraciones incluyen las aplicaciones integradas de Django, `apps/core` (`0001_initial`, con el modelo técnico `IntegrationProbe` usado en las pruebas de integración), `apps/users` (`0001_initial`, tabla de usuarios) y `apps/datasets` (`0001_initial`, tabla de datasets). `datasets` depende de `users`, y Django las aplica en ese orden.
 
 ### 5. Acceder al backend
 
-El backend queda disponible en http://127.0.0.1:8000/ con el servidor de desarrollo de Django. No se debe usar runserver como servidor de producción.
+El backend queda disponible en http://127.0.0.1:8080/ con el servidor de desarrollo de Django (`compose.yaml` publica el puerto 8000 del contenedor en el 8080 local). No se debe usar runserver como servidor de producción.
 
 Para ver los registros del backend o detener el entorno:
 
 ~~~bash
 docker compose logs -f backend
-docker compose down        # conserva los datos; con -v también los elimina
+docker compose down        # detiene los contenedores y conserva los datos
 ~~~
 
-## Endpoint de estado
+No uses `docker compose down -v` como solución general: elimina el volumen de PostgreSQL y todos sus datos.
+
+## Endpoints de estado
+
+### Estado de la aplicación
 
 ~~~http
 GET /api/v1/health/
@@ -125,17 +129,113 @@ Respuesta esperada (HTTP 200):
 }
 ~~~
 
-Este endpoint comprueba que la aplicación HTTP está respondiendo. No verifica todavía la conectividad con PostgreSQL, S3 ni BioDynamics; esas comprobaciones se añadirán cuando se definan las necesidades de disponibilidad y despliegue.
+Este endpoint solo comprueba que la aplicación HTTP está respondiendo. **No consulta PostgreSQL, a propósito**: el CI lo usa para verificar la imagen Docker sin base de datos.
 
-Ejemplo desde terminal:
+### Estado de la base de datos
+
+~~~http
+GET /api/v1/health/db/
+~~~
+
+Ejecuta una consulta mínima (`SELECT 1`) contra PostgreSQL.
+
+- **HTTP 200** si la base de datos responde.
+- **HTTP 503 Service Unavailable** si no se puede conectar o consultar.
+
+Aún no verifica S3 ni BioDynamics; esas comprobaciones se añadirán cuando se definan las necesidades de disponibilidad y despliegue.
+
+### Ejemplos desde terminal
 
 ~~~bash
-curl -i http://127.0.0.1:8000/api/v1/health/
+curl -i http://127.0.0.1:8080/api/v1/health/
+curl -i http://127.0.0.1:8080/api/v1/health/db/
 ~~~
 
 En Windows PowerShell usa `curl.exe` en lugar de `curl`.
 
+Para ver el 503, detén la base con `docker compose stop db`, repite la petición y vuelve a iniciarla con `docker compose start db`.
+
 Las solicitudes POST y otros métodos no admitidos reciben HTTP 405 Method Not Allowed.
+
+## Catálogo de datasets
+
+~~~http
+GET /api/v1/datasets/
+~~~
+
+Lista los datasets registrados en PostgreSQL, paginados y ordenados del más reciente al más antiguo. Por ahora no requiere autenticación; se protegerá cuando exista el login de BioGestor.
+
+| Parámetro | Descripción |
+| --- | --- |
+| `page` | Número de página (por defecto 1). Una página inexistente responde 404. |
+| `page_size` | Resultados por página (por defecto 10, máximo 100). |
+| `search` | Busca en nombre, descripción y especie, sin distinguir mayúsculas. |
+| `type` | `audio`, `image`, `video`, `csv`, `text` u `other`. |
+| `status` | `active`, `processing`, `archived` o `error`. |
+| `owner` | Id del responsable. |
+| `ordering` | `name`, `created_at`, `capture_date` o `type`; con `-` delante es descendente. Por defecto `-created_at`. |
+
+Todos los parámetros son opcionales y se pueden combinar. Un valor no válido en `type`, `status` u `owner` responde HTTP 400 indicando el parámetro.
+
+Respuesta (HTTP 200):
+
+~~~json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "name": "Cantos de aves",
+      "type": "audio",
+      "status": "active",
+      "owner": 3,
+      "created_at": "2026-10-20T15:30:00Z"
+    }
+  ]
+}
+~~~
+
+`owner` es el id del usuario responsable o `null` si el dataset no tiene uno.
+
+~~~bash
+curl -i http://127.0.0.1:8080/api/v1/datasets/
+curl -i "http://127.0.0.1:8080/api/v1/datasets/?type=audio&ordering=name&page_size=5"
+curl -i "http://127.0.0.1:8080/api/v1/datasets/?search=camaron"
+~~~
+
+## Modelos de dominio
+
+### Dataset (`apps/datasets`)
+
+Representa un conjunto de datos registrado en BioGestor. **BioGestor no sube ni copia archivos**: solo guarda la referencia a un objeto o carpeta que ya existe en S3, junto con su metadata.
+
+| Campo | Tipo | Obligatorio | Regla |
+| --- | --- | --- | --- |
+| `name` | texto (150) | sí | |
+| `type` | `DatasetType` | sí | audio, image, video, csv, text, other |
+| `status` | `Status` | no | active (por defecto), processing, archived, error |
+| `owner` | → `users.User` | no | no se puede borrar un usuario que tiene datasets |
+| `capture_date` | fecha | no | si se registra, no puede ser futura |
+| `s3_uri` | texto (1024) | no | no se puede repetir la misma referencia |
+| `farm`, `pool`, `species`, `license`, `description` | texto | no | |
+| `file_format`, `size_bytes`, `file_count`, `type_metadata` | varios | no | `type_metadata` guarda datos propios de cada tipo (JSON) |
+| `created_at`, `updated_at` | fecha y hora | automáticos | |
+
+La fecha de captura y la referencia única de S3 se validan con `full_clean()` y también como restricciones en PostgreSQL. Django no ejecuta `full_clean()` al llamar a `save()`, por lo que los formularios y la futura API deben llamarlo antes de guardar.
+
+### User (`apps/users`)
+
+Usuario según el diagrama de clases. Es un modelo de dominio: **no** reemplaza el usuario de autenticación de Django (`AUTH_USER_MODEL`) ni incluye login, permisos o endpoints; eso corresponde a otra tarea.
+
+| Campo | Tipo | Obligatorio | Regla |
+| --- | --- | --- | --- |
+| `name` | texto (150) | sí | |
+| `email` | correo | sí | único |
+| `role` | `UserRole` | no | por ahora solo `administrator` (por defecto) |
+| `dept` | texto (100) | no | |
+| `status` | `UserStatus` | no | active (por defecto), inactive |
 
 ## Pruebas y calidad
 
@@ -147,7 +247,25 @@ docker compose exec backend ruff check .
 docker compose exec backend ruff format --check .
 ~~~
 
-La integración continua ejecuta comprobaciones de Django, pruebas, cobertura mínima del 70 % para el módulo core del endpoint y comprobaciones de Ruff. Las pruebas del health check no requieren que PostgreSQL esté disponible; ejecutar migraciones sí requiere una base de datos activa.
+Las pruebas de los health checks no requieren que PostgreSQL esté disponible (la caída de la base se simula); ejecutar migraciones sí requiere una base de datos activa. Las pruebas de `users` y `datasets` usan la base temporal que crea el test runner de Django.
+
+## Integración continua
+
+El flujo `.github/workflows/ci.yml` se ejecuta con GitHub Actions en cada Pull Request y push hacia `develop` o `main`, y también puede lanzarse manualmente desde la pestaña Actions (`workflow_dispatch`). Tiene dos jobs:
+
+1. **Instalación, verificación y pruebas** (con un servicio PostgreSQL 17):
+   - Instala las dependencias de `requirements-dev.txt` con Python 3.13 (versión tomada de `.python-version`).
+   - Ejecuta `ruff check` y `ruff format --check`.
+   - Compila las fuentes con `python -m compileall`.
+   - Ejecuta `python manage.py check` y verifica que no falten migraciones (`makemigrations --check --dry-run`).
+   - Aplica las migraciones sobre una base de datos PostgreSQL limpia.
+   - Ejecuta las pruebas con Coverage.py y exige una cobertura mínima del 70 %.
+2. **Compilación de imagen Docker** (solo si el job anterior pasa):
+   - Construye la imagen a partir del `Dockerfile`.
+   - Ejecuta `python manage.py check` dentro de la imagen.
+   - Levanta el backend con Gunicorn, sin base de datos, y comprueba que `GET /api/v1/health/` responda.
+
+Las credenciales del workflow son exclusivas de CI y no se deben reutilizar en otros entornos. Se recomienda configurar ambos jobs como comprobaciones obligatorias en la protección de las ramas `develop` y `main`.
 
 ## Variables de entorno
 
@@ -164,6 +282,6 @@ La integración continua ejecuta comprobaciones de Django, pruebas, cobertura m�
 
 En un entorno que no sea de desarrollo debe configurarse una clave segura, deshabilitar DJANGO_DEBUG y ajustar los hosts permitidos.
 
-## Alcance de esta inicialización
+## Alcance actual
 
-Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoint de estado, pruebas automatizadas y documentación de ejecución. No incluye todavía modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
+Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, los modelos de dominio `User` y `Dataset` con sus migraciones, el endpoint de catálogo de datasets, pruebas automatizadas y documentación de ejecución. No incluye todavía el resto de modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.

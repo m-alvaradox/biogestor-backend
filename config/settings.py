@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "apps.core.apps.CoreConfig",
-    "apps.identity.apps.IdentityConfig",
+    "apps.users.apps.UsersConfig",
     "apps.datasets.apps.DatasetsConfig",
     "apps.ml_models.apps.MlModelsConfig",
     "apps.experiments.apps.ExperimentsConfig",
