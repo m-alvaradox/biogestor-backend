@@ -190,19 +190,60 @@ Respuesta (HTTP 200):
       "name": "Cantos de aves",
       "type": "audio",
       "status": "active",
-      "owner": 3,
+      "owner": { "id": 3, "name": "Ana Pérez" },
       "created_at": "2026-10-20T15:30:00Z"
     }
   ]
 }
 ~~~
 
-`owner` es el id del usuario responsable o `null` si el dataset no tiene uno.
+`owner` es el usuario responsable (`id` y `name`) o `null` si el dataset no tiene uno.
 
 ~~~bash
 curl -i http://127.0.0.1:8080/api/v1/datasets/
 curl -i "http://127.0.0.1:8080/api/v1/datasets/?type=audio&ordering=name&page_size=5"
 curl -i "http://127.0.0.1:8080/api/v1/datasets/?search=camaron"
+~~~
+
+## Detalle de dataset
+
+~~~http
+GET /api/v1/datasets/<id>/
+~~~
+
+Devuelve un dataset con los campos del catálogo más su metadata y su almacenamiento. Por ahora no requiere autenticación, igual que el catálogo. Un id inexistente responde HTTP 404 y los métodos distintos de GET responden HTTP 405.
+
+Respuesta (HTTP 200):
+
+~~~json
+{
+  "id": 5,
+  "name": "Lote de audio de tilapia 001",
+  "type": "audio",
+  "status": "active",
+  "owner": { "id": 2, "name": "Dra. Ana Lima" },
+  "created_at": "2026-10-28T22:51:18.551016-05:00",
+  "species": "Tilapia (Oreochromis niloticus)",
+  "farm": "Aquamar Norte",
+  "pool": "Piscina A-3",
+  "capture_date": "2024-10-12",
+  "type_metadata": { "microphone": "Hidrófono DolphinEar DE200", "sample_rate": 44100 },
+  "storage": {
+    "s3_uri": "s3://biogestor-data/tilapia/audio/batch-001/",
+    "file_format": ".WAV",
+    "size_bytes": 4700000000,
+    "file_count": 1247
+  }
+}
+~~~
+
+- `type_metadata` es un JSON libre con los datos propios del tipo (micrófono, frecuencia de muestreo, resolución...).
+- `storage` agrupa la referencia al archivo en S3. `size_bytes` está en bytes y `file_format` incluye el punto (`.WAV`). Cuando exista el versionado de datasets, `storage` corresponderá a la versión más reciente.
+- Los campos opcionales sin valor se devuelven como `null`.
+
+~~~bash
+curl -i http://127.0.0.1:8080/api/v1/datasets/1/
+curl -i http://127.0.0.1:8080/api/v1/datasets/999999/
 ~~~
 
 ## Modelos de dominio
