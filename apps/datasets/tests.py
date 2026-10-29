@@ -135,8 +135,18 @@ class DatasetPersistenceTests(TestCase):
 
         saved = Dataset.objects.get(pk=dataset.pk)
         optional_fields = [
-            "owner", "description", "species", "farm", "pool", "capture_date",
-            "license", "type_metadata", "s3_uri", "file_format", "size_bytes", "file_count",
+            "owner",
+            "description",
+            "species",
+            "farm",
+            "pool",
+            "capture_date",
+            "license",
+            "type_metadata",
+            "s3_uri",
+            "file_format",
+            "size_bytes",
+            "file_count",
         ]
         for field in optional_fields:
             with self.subTest(field=field):
