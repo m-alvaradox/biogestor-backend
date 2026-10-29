@@ -1,17 +1,20 @@
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.permissions import AllowAny
 
 from .models import Dataset
 from .pagination import DatasetPagination
-from .serializers import DatasetListSerializer
+from .serializers import DatasetDetailSerializer, DatasetListSerializer
 
 
-class DatasetListView(ListAPIView):
-    queryset = Dataset.objects.all()
-    serializer_class = DatasetListSerializer
+class DatasetViewMixin:
+    queryset = Dataset.objects.select_related("owner")
     permission_classes = [AllowAny]
+
+
+class DatasetListView(DatasetViewMixin, ListAPIView):
+    serializer_class = DatasetListSerializer
     pagination_class = DatasetPagination
     filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ["name", "description", "species"]
@@ -41,3 +44,7 @@ class DatasetListView(ListAPIView):
             queryset = queryset.filter(owner_id=int(owner))
 
         return queryset
+
+
+class DatasetDetailView(DatasetViewMixin, RetrieveAPIView):
+    serializer_class = DatasetDetailSerializer
