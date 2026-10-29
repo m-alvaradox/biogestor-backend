@@ -120,7 +120,7 @@ class DatasetPersistenceTests(TestCase):
         Dataset.objects.create(name="A", type="other")
         Dataset.objects.create(name="B", type="other")
 
-        self.assertEqual(Dataset.objects.filter(s3_uri="").count(), 2)
+        self.assertEqual(Dataset.objects.filter(s3_uri__isnull=True).count(), 2)
 
     def test_owner_is_a_user_and_cannot_be_deleted_while_owning_datasets(self):
         owner = User.objects.create(name="Ana Lima", email="ana@example.com")
@@ -129,3 +129,20 @@ class DatasetPersistenceTests(TestCase):
         self.assertEqual(owner.datasets.get(), dataset)
         with self.assertRaises(ProtectedError):
             owner.delete()
+
+    def test_optional_fields_are_stored_as_null(self):
+        dataset = Dataset.objects.create(name="Only required", type=Dataset.DatasetType.TEXT)
+
+        saved = Dataset.objects.get(pk=dataset.pk)
+        optional_fields = [
+            "owner", "description", "species", "farm", "pool", "capture_date",
+            "license", "type_metadata", "s3_uri", "file_format", "size_bytes", "file_count",
+        ]
+        for field in optional_fields:
+            with self.subTest(field=field):
+                self.assertIsNone(getattr(saved, field))
+
+    def test_status_accepts_null(self):
+        dataset = Dataset.objects.create(name="No status", type="csv", status=None)
+
+        self.assertIsNone(Dataset.objects.get(pk=dataset.pk).status)

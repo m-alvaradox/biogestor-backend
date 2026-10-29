@@ -26,8 +26,8 @@ class Dataset(models.Model):
         ERROR = "error", "Error"
 
     # Required metadata (PO decision)
-    name = models.CharField(max_length=150)
-    type = models.CharField(max_length=20, choices=DatasetType.choices)
+    name = models.CharField(max_length=150, null=False)
+    type = models.CharField(max_length=20, choices=DatasetType.choices, null=False)
 
     # Prototype list view: name, type, researcher (owner), registration date, status
     owner = models.ForeignKey(
@@ -37,23 +37,25 @@ class Dataset(models.Model):
         blank=True,
         related_name="datasets",
     )
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.ACTIVE, null=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     # Prototype detail view: metadata
-    description = models.TextField(blank=True)
-    species = models.CharField(max_length=100, blank=True)
-    farm = models.CharField(max_length=100, blank=True)
-    pool = models.CharField(max_length=50, blank=True)
+    description = models.TextField(blank=True, null=True)
+    species = models.CharField(max_length=100, blank=True, null=True)
+    farm = models.CharField(max_length=100, blank=True, null=True)
+    pool = models.CharField(max_length=50, blank=True, null=True)
     capture_date = models.DateField(null=True, blank=True)
-    license = models.CharField(max_length=100, blank=True)
+    license = models.CharField(max_length=100, blank=True, null=True)
     # Fields that depend on the type (microphone, sample rate, resolution...)
-    type_metadata = models.JSONField(default=dict, blank=True)
+    type_metadata = models.JSONField(null=True, blank=True)
 
     # Prototype detail view: storage
-    s3_uri = models.CharField(max_length=1024, blank=True)
-    file_format = models.CharField(max_length=30, blank=True)
+    s3_uri = models.CharField(max_length=1024, blank=True, null=True)
+    file_format = models.CharField(max_length=30, blank=True, null=True)
     size_bytes = models.PositiveBigIntegerField(null=True, blank=True)
     file_count = models.PositiveIntegerField(null=True, blank=True)
 
