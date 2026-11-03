@@ -20,7 +20,7 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 ├── apps/
 │   ├── audit/          # Auditoría funcional
 │   ├── core/           # Funciones transversales y health checks
-│   ├── datasets/       # Catálogo de datasets (modelo Dataset)
+│   ├── datasets/       # Catálogo de datasets (modelo Dataset) y comando seed_data
 │   ├── experiments/    # Experimentos y resultados
 │   ├── integrations/   # Integración con BioDynamics
 │   ├── ml_models/      # Modelos y versiones de ML
@@ -28,6 +28,7 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 │   ├── storage/        # Referencias y acceso a archivos
 │   └── users/          # Usuarios según el diagrama de clases (modelo User)
 ├── config/             # Configuración Django, URLs, ASGI y WSGI
+├── docs/               # Guías del equipo (datos semilla)
 ├── .dockerignore       # Archivos excluidos de la imagen de Docker
 ├── .env.example        # Variables de ejemplo; no contiene secretos reales
 ├── Dockerfile          # Imagen del backend para desarrollo local
@@ -111,6 +112,21 @@ docker compose down        # detiene los contenedores y conserva los datos
 ~~~
 
 No uses `docker compose down -v` como solución general: elimina el volumen de PostgreSQL y todos sus datos.
+
+## Datos semilla para desarrollo
+
+El comando `seed_data` puebla la base local con datos ficticios para que Frontend y Backend prueben contra la misma información. Siembra usuarios y datasets; las versiones, los modelos de ML, los experimentos y las observaciones se siembran cuando existan sus modelos (mientras tanto se omiten con una advertencia).
+
+~~~bash
+docker compose exec backend python manage.py migrate
+docker compose exec backend python manage.py seed_data
+~~~
+
+- Es idempotente: ejecutarlo varias veces no genera duplicados.
+- Solo se ejecuta con `DJANGO_DEBUG` activo; con `DEBUG=False` se niega, salvo que se use `--force`.
+- No incluye credenciales ni datos reales: los correos son `@example.com` y las referencias S3 apuntan a `s3://biogestor-seed/`.
+
+Detalle de los datos incluidos, verificación y cómo agregar entidades: [docs/SEED_DATA.md](docs/seed_data.md).
 
 ## Endpoints de estado
 
@@ -325,4 +341,4 @@ En un entorno que no sea de desarrollo debe configurarse una clave segura, desha
 
 ## Alcance actual
 
-Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, los modelos de dominio `User` y `Dataset` con sus migraciones, el endpoint de catálogo de datasets, pruebas automatizadas y documentación de ejecución. No incluye todavía el resto de modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
+Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, los modelos de dominio `User` y `Dataset` con sus migraciones, el endpoint de catálogo de datasets, el comando `seed_data` de datos semilla de desarrollo, pruebas automatizadas y documentación de ejecución. No incluye todavía el resto de modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
