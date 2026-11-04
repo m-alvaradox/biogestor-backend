@@ -20,7 +20,7 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 ├── apps/
 │   ├── audit/          # Auditoría funcional
 │   ├── core/           # Funciones transversales y health checks
-│   ├── datasets/       # Catálogo de datasets (modelo Dataset)
+│   ├── datasets/       # Catálogo de datasets (modelo Dataset) y comando seed_data
 │   ├── experiments/    # Experimentos y resultados
 │   ├── integrations/   # Integración con BioDynamics
 │   ├── ml_models/      # Modelos y versiones de ML
@@ -28,6 +28,7 @@ Django 5.2 es una versión LTS. Las versiones de dependencias están fijadas en 
 │   ├── storage/        # Referencias y acceso a archivos
 │   └── users/          # Usuarios según el diagrama de clases (modelo User)
 ├── config/             # Configuración Django, URLs, ASGI y WSGI
+├── docs/               # Guías del equipo (datos semilla)
 ├── .dockerignore       # Archivos excluidos de la imagen de Docker
 ├── .env.example        # Variables de ejemplo; no contiene secretos reales
 ├── Dockerfile          # Imagen del backend para desarrollo local
@@ -112,6 +113,21 @@ docker compose down        # detiene los contenedores y conserva los datos
 
 No uses `docker compose down -v` como solución general: elimina el volumen de PostgreSQL y todos sus datos.
 
+## Datos semilla para desarrollo
+
+El comando `seed_data` puebla la base local con datos ficticios para que Frontend y Backend prueben contra la misma información. Siembra usuarios y datasets; las versiones, los modelos de ML, los experimentos y las observaciones se siembran cuando existan sus modelos (mientras tanto se omiten con una advertencia).
+
+~~~bash
+docker compose exec backend python manage.py migrate
+docker compose exec backend python manage.py seed_data
+~~~
+
+- Es idempotente: ejecutarlo varias veces no genera duplicados.
+- Solo se ejecuta con `DJANGO_DEBUG` activo; con `DEBUG=False` se niega, salvo que se use `--force`.
+- No incluye credenciales ni datos reales: los correos son `@example.com` y las referencias S3 apuntan a `s3://biogestor-seed/`.
+
+Detalle de los datos incluidos, verificación y cómo agregar entidades: [docs/SEED_DATA.md](docs/seed_data.md).
+
 ## Endpoints de estado
 
 ### Estado de la aplicación
@@ -155,15 +171,16 @@ En Windows PowerShell usa `curl.exe` en lugar de `curl`.
 
 Para ver el 503, detén la base con `docker compose stop db`, repite la petición y vuelve a iniciarla con `docker compose start db`.
 
-Las solicitudes POST y otros métodos no admitidos reciben HTTP 405 Method Not Allowed.
+Los métodos no admitidos en los endpoints de comprobación de estado reciben HTTP 405 Method Not Allowed.
 
 ## Catálogo de datasets
 
 ~~~http
 GET /api/v1/datasets/
+POST /api/v1/datasets/
 ~~~
 
-Lista los datasets registrados en PostgreSQL, paginados y ordenados del más reciente al más antiguo. Por ahora no requiere autenticación; se protegerá cuando exista el login de BioGestor.
+El método GET lista los datasets registrados en PostgreSQL, paginados y ordenados del más reciente al más antiguo. No requiere autenticación por ahora; se protegerá cuando exista el login de BioGestor.
 
 | Parámetro | Descripción |
 | --- | --- |
@@ -204,6 +221,90 @@ curl -i http://127.0.0.1:8080/api/v1/datasets/
 curl -i "http://127.0.0.1:8080/api/v1/datasets/?type=audio&ordering=name&page_size=5"
 curl -i "http://127.0.0.1:8080/api/v1/datasets/?search=camaron"
 ~~~
+
+### Registro de dataset
+
+```http
+POST /api/v1/datasets/
+```
+
+Registra un nuevo dataset en PostgreSQL mediante sus metadatos y la referencia a su almacenamiento existente. Este endpoint no sube archivos a S3.
+
+**Campos de entrada:**
+
+| Campo | Obligatorio | Descripción |
+| --- | --- | --- |
+| `name` | Sí | Nombre del dataset. Máximo 150 caracteres. |
+| `type` | Sí | `audio`, `image`, `video`, `csv`, `text` u `other`. |
+| `status` | No | `active`, `processing`, `archived` o `error`. Por defecto: `active`. |
+| `owner` | No | ID de un usuario existente. |
+| `description` | No | Descripción del dataset. |
+| `species` | No | Especie asociada. |
+| `farm` | No | Granja o camaronera. |
+| `pool` | No | Piscina o estanque. |
+| `capture_date` | No | Fecha de captura. No puede ser futura. |
+| `license` | No | Licencia del dataset. |
+| `type_metadata` | No | JSON con información específica del tipo. |
+| `storage` | No | Objeto con los datos de almacenamiento. |
+
+El objeto `storage` admite los siguientes campos:
+
+- `s3_uri`: referencia al objeto o carpeta existente en S3. No puede duplicarse.
+- `file_format`: formato del archivo.
+- `size_bytes`: tamaño total en bytes.
+- `file_count`: cantidad de archivos.
+
+**Ejemplo de solicitud (JSON):**
+
+```json
+{
+  "name": "Grabaciones de camarón",
+  "type": "audio",
+  "status": "active",
+  "owner": 3,
+  "description": "Grabaciones acústicas de camarón",
+  "species": "Penaeus vannamei",
+  "farm": "Camaronera Norte",
+  "pool": "Piscina A-3",
+  "capture_date": "2026-10-15",
+  "type_metadata": {
+    "sample_rate": 44100,
+    "microphone": "Hidrofono"
+  },
+  "storage": {
+    "s3_uri": "s3://biogestor-data/audio/batch-001/",
+    "file_format": ".WAV",
+    "size_bytes": 4700000,
+    "file_count": 25
+  }
+}
+```
+
+**Respuesta exitosa (HTTP 201 Created):**
+
+Devuelve el dataset registrado, incluyendo su identificador, fecha de creación, metadatos y almacenamiento.
+
+**Respuestas de error:**
+
+| Código HTTP | Descripción |
+| --- | --- |
+| `400 Bad Request` | Datos inválidos, campos obligatorios ausentes, fecha futura, usuario inexistente o referencia S3 duplicada. |
+| `404 Not Found` | El registro está deshabilitado cuando `DEBUG=False`. |
+
+**Restricción de seguridad:** el endpoint de escritura solo está habilitado en el entorno de desarrollo (`DEBUG=True`). Actualmente no requiere autenticación en ese entorno. No debe exponerse públicamente en producción hasta implementar autenticación y autorización.
+
+**Ejemplo de uso:**
+
+```bash
+curl -i -X POST http://127.0.0.1:8080/api/v1/datasets/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Grabaciones de camarón",
+    "type": "audio",
+    "species": "Penaeus vannamei"
+  }'
+```
+
 
 ## Detalle de dataset
 
@@ -325,4 +426,4 @@ En un entorno que no sea de desarrollo debe configurarse una clave segura, desha
 
 ## Alcance actual
 
-Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, los modelos de dominio `User` y `Dataset` con sus migraciones, el endpoint de catálogo de datasets, pruebas automatizadas y documentación de ejecución. No incluye todavía el resto de modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
+Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, los modelos de dominio `User` y `Dataset` con sus migraciones, el endpoint de catálogo de datasets, el comando `seed_data` de datos semilla de desarrollo, pruebas automatizadas y documentación de ejecución. No incluye todavía el resto de modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
