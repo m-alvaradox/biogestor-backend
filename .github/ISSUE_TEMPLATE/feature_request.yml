@@ -1,0 +1,124 @@
+
+name: "Feature / User Story"
+description: "Registrar una historia de usuario de BioGestor"
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Historia de usuario - BioGestor
+        Completa los campos según la Definition of Ready.
+        El Product Owner debe validar el ítem antes
+        de incorporarlo a un sprint.
+
+  - type: textarea
+    id: story
+    attributes:
+      label: "Historia de usuario"
+      description: "Usa el formato Como / Quiero / Para."
+      placeholder: |
+        Como [rol],
+        quiero [funcionalidad],
+        para [beneficio].
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Criterios de aceptación"
+      description: "Utiliza Dado / Cuando / Entonces."
+      placeholder: |
+        Escenario 1:
+        Dado que...
+        Cuando...
+        Entonces...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Área responsable"
+      options:
+        - Frontend
+        - Backend
+        - Base de datos
+        - CI/CD
+        - Multiarea
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Alcance y entregables"
+      description: "Explica qué debe implementarse."
+    validations:
+      required: true
+
+  - type: input
+    id: estimation
+    attributes:
+      label: "Estimación"
+      placeholder: "Ejemplo: 5 puntos de historia"
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: "Dependencias"
+      placeholder: "Issues relacionados o ninguna."
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "Referencias"
+      description: "Mockups, rutas Angular, endpoints o entidades."
+      placeholder: |
+        Prototipo:
+        Ruta Angular:
+        Entidades afectadas:
+        Documentación:
+
+  - type: textarea
+    id: metrics
+    attributes:
+      label: "Métricas y permisos aplicables"
+      description: "Cuando aplique, especifica métricas de ML y roles autorizados."
+      placeholder: |
+        Categoría y subcategoría:
+        Métricas validadas:
+        Roles permitidos:
+        No aplica:
+
+  - type: input
+    id: owner
+    attributes:
+      label: "Responsable"
+      placeholder: "Usuario(s) de GitHub"
+    validations:
+      required: true
+
+  - type: input
+    id: sprint
+    attributes:
+      label: "Sprint"
+      placeholder: "Ejemplo: Sprint 1"
+
+  - type: checkboxes
+    id: ready
+    attributes:
+      label: "Definition of Ready"
+      description: "Marcar antes de incorporar al sprint."
+      options:
+        - label: "El objetivo y los criterios son claros."
+        - label: "La estimación fue acordada por el equipo."
+        - label: "El trabajo cabe dentro del sprint."
+        - label: "Las dependencias están identificadas."
+        - label: "Se incluyeron las referencias necesarias."
+        - label: "El Product Owner aprobó el ítem."
