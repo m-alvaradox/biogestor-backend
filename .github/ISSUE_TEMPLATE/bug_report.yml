@@ -1,0 +1,120 @@
+
+name: "🐛 Bug Report"
+description: "Reportar un error en BioGestor"
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Reporte de errores - BioGestor
+        Describe el problema de manera clara.
+        No incluyas credenciales ni datos sensibles.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Área afectada"
+      options:
+        - Frontend
+        - Backend
+        - Base de datos
+        - CI/CD
+        - Integración API
+        - Por clasificar
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Descripción del problema"
+      description: "Explica qué está fallando."
+      placeholder: "Al intentar registrar un dataset..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Entorno"
+      description: "Indica entorno, navegador, rama y commit."
+      placeholder: |
+        Entorno: local / dev / producción
+        Navegador:
+        Rama:
+        Commit:
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Pasos para reproducir"
+      placeholder: |
+        1. Iniciar sesión
+        2. Ir a Datasets
+        3. Seleccionar Registrar dataset
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Resultado esperado"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: "Resultado obtenido"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severidad"
+      options:
+        - "Crítica"
+        - "Alta"
+        - "Media"
+        - "Baja"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: "Frecuencia"
+      options:
+        - Siempre
+        - A veces
+        - Una vez
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: "Evidencia"
+      description: "Adjunta capturas, videos o logs."
+      placeholder: "Arrastra archivos aquí o pega enlaces."
+
+  - type: input
+    id: related
+    attributes:
+      label: "Historia, tarea o PR relacionado"
+      placeholder: "Ejemplo: S1-07, #15"
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "Verificación"
+      options:
+        - label: "He revisado que no exista un Issue duplicado."
+          required: true
+        - label: "No he incluido información sensible."
+          required: true
