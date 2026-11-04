@@ -171,15 +171,16 @@ En Windows PowerShell usa `curl.exe` en lugar de `curl`.
 
 Para ver el 503, detén la base con `docker compose stop db`, repite la petición y vuelve a iniciarla con `docker compose start db`.
 
-Las solicitudes POST y otros métodos no admitidos reciben HTTP 405 Method Not Allowed.
+Los métodos no admitidos en los endpoints de comprobación de estado reciben HTTP 405 Method Not Allowed.
 
 ## Catálogo de datasets
 
 ~~~http
 GET /api/v1/datasets/
+POST /api/v1/datasets/
 ~~~
 
-Lista los datasets registrados en PostgreSQL, paginados y ordenados del más reciente al más antiguo. Por ahora no requiere autenticación; se protegerá cuando exista el login de BioGestor.
+El método GET lista los datasets registrados en PostgreSQL, paginados y ordenados del más reciente al más antiguo. No requiere autenticación por ahora; se protegerá cuando exista el login de BioGestor.
 
 | Parámetro | Descripción |
 | --- | --- |
@@ -220,6 +221,90 @@ curl -i http://127.0.0.1:8080/api/v1/datasets/
 curl -i "http://127.0.0.1:8080/api/v1/datasets/?type=audio&ordering=name&page_size=5"
 curl -i "http://127.0.0.1:8080/api/v1/datasets/?search=camaron"
 ~~~
+
+### Registro de dataset
+
+```http
+POST /api/v1/datasets/
+```
+
+Registra un nuevo dataset en PostgreSQL mediante sus metadatos y la referencia a su almacenamiento existente. Este endpoint no sube archivos a S3.
+
+**Campos de entrada:**
+
+| Campo | Obligatorio | Descripción |
+| --- | --- | --- |
+| `name` | Sí | Nombre del dataset. Máximo 150 caracteres. |
+| `type` | Sí | `audio`, `image`, `video`, `csv`, `text` u `other`. |
+| `status` | No | `active`, `processing`, `archived` o `error`. Por defecto: `active`. |
+| `owner` | No | ID de un usuario existente. |
+| `description` | No | Descripción del dataset. |
+| `species` | No | Especie asociada. |
+| `farm` | No | Granja o camaronera. |
+| `pool` | No | Piscina o estanque. |
+| `capture_date` | No | Fecha de captura. No puede ser futura. |
+| `license` | No | Licencia del dataset. |
+| `type_metadata` | No | JSON con información específica del tipo. |
+| `storage` | No | Objeto con los datos de almacenamiento. |
+
+El objeto `storage` admite los siguientes campos:
+
+- `s3_uri`: referencia al objeto o carpeta existente en S3. No puede duplicarse.
+- `file_format`: formato del archivo.
+- `size_bytes`: tamaño total en bytes.
+- `file_count`: cantidad de archivos.
+
+**Ejemplo de solicitud (JSON):**
+
+```json
+{
+  "name": "Grabaciones de camarón",
+  "type": "audio",
+  "status": "active",
+  "owner": 3,
+  "description": "Grabaciones acústicas de camarón",
+  "species": "Penaeus vannamei",
+  "farm": "Camaronera Norte",
+  "pool": "Piscina A-3",
+  "capture_date": "2026-10-15",
+  "type_metadata": {
+    "sample_rate": 44100,
+    "microphone": "Hidrofono"
+  },
+  "storage": {
+    "s3_uri": "s3://biogestor-data/audio/batch-001/",
+    "file_format": ".WAV",
+    "size_bytes": 4700000,
+    "file_count": 25
+  }
+}
+```
+
+**Respuesta exitosa (HTTP 201 Created):**
+
+Devuelve el dataset registrado, incluyendo su identificador, fecha de creación, metadatos y almacenamiento.
+
+**Respuestas de error:**
+
+| Código HTTP | Descripción |
+| --- | --- |
+| `400 Bad Request` | Datos inválidos, campos obligatorios ausentes, fecha futura, usuario inexistente o referencia S3 duplicada. |
+| `404 Not Found` | El registro está deshabilitado cuando `DEBUG=False`. |
+
+**Restricción de seguridad:** el endpoint de escritura solo está habilitado en el entorno de desarrollo (`DEBUG=True`). Actualmente no requiere autenticación en ese entorno. No debe exponerse públicamente en producción hasta implementar autenticación y autorización.
+
+**Ejemplo de uso:**
+
+```bash
+curl -i -X POST http://127.0.0.1:8080/api/v1/datasets/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Grabaciones de camarón",
+    "type": "audio",
+    "species": "Penaeus vannamei"
+  }'
+```
+
 
 ## Detalle de dataset
 

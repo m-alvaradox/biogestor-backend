@@ -1,11 +1,16 @@
-from rest_framework.exceptions import ValidationError
+from django.conf import settings
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
 from rest_framework.permissions import AllowAny
 
 from .models import Dataset
 from .pagination import DatasetPagination
-from .serializers import DatasetDetailSerializer, DatasetListSerializer
+from .serializers import (
+    DatasetCreateSerializer,
+    DatasetDetailSerializer,
+    DatasetListSerializer,
+)
 
 
 class DatasetViewMixin:
@@ -13,7 +18,7 @@ class DatasetViewMixin:
     permission_classes = [AllowAny]
 
 
-class DatasetListView(DatasetViewMixin, ListAPIView):
+class DatasetListView(DatasetViewMixin, ListCreateAPIView):
     serializer_class = DatasetListSerializer
     pagination_class = DatasetPagination
     filter_backends = [SearchFilter, OrderingFilter]
@@ -44,6 +49,17 @@ class DatasetListView(DatasetViewMixin, ListAPIView):
             queryset = queryset.filter(owner_id=int(owner))
 
         return queryset
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return DatasetCreateSerializer
+        return DatasetListSerializer
+
+    def create(self, request, *args, **kwargs):
+        if not settings.DEBUG:
+            raise NotFound("No encontrado.")
+
+        return super().create(request, *args, **kwargs)
 
 
 class DatasetDetailView(DatasetViewMixin, RetrieveAPIView):

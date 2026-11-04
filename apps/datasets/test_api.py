@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -14,6 +15,7 @@ def create_dataset(name, **fields):
     return Dataset.objects.create(name=name, **fields)
 
 
+@override_settings(DEBUG=True)
 class DatasetListEndpointTests(APITestCase):
     def setUp(self):
         self.url = reverse("dataset-list")
@@ -152,10 +154,121 @@ class DatasetListEndpointTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    def test_rejects_post(self):
-        response = self.client.post(self.url, {"name": "Nuevo", "type": "audio"})
+    def test_creates_dataset_with_required_fields(self):
+        payload = {
+            "name": "Nuevo dataset",
+            "type": "audio",
+        }
 
-        self.assertEqual(response.status_code, 405)
+        response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, 201, response.content.decode())
+
+        body = response.json()
+        dataset = Dataset.objects.get(pk=body["id"])
+
+        self.assertEqual(body["name"], "Nuevo dataset")
+        self.assertEqual(body["type"], "audio")
+        self.assertEqual(body["status"], "active")
+        self.assertEqual(dataset.name, "Nuevo dataset")
+
+    def test_creates_dataset_with_metadata_and_storage(self):
+        payload = {
+            "name": "Grabaciones de camarón",
+            "type": "audio",
+            "species": "Penaeus vannamei",
+            "type_metadata": {"sample_rate": 44100},
+            "storage": {
+                "s3_uri": "s3://biogestor-data/audio/batch-001/",
+                "file_format": ".WAV",
+                "size_bytes": 4700000,
+                "file_count": 25,
+            },
+        }
+
+        response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, 201, response.content.decode())
+
+        dataset = Dataset.objects.get(pk=response.json()["id"])
+        self.assertEqual(dataset.species, "Penaeus vannamei")
+        self.assertEqual(dataset.type_metadata["sample_rate"], 44100)
+        self.assertEqual(
+            dataset.s3_uri,
+            "s3://biogestor-data/audio/batch-001/",
+        )
+        self.assertEqual(dataset.file_count, 25)
+
+    def test_rejects_missing_required_fields(self):
+        payloads = [
+            ({"name": "Sin tipo"}, "type"),
+            ({"type": "audio"}, "name"),
+        ]
+
+        for payload, field in payloads:
+            with self.subTest(field=field):
+                response = self.client.post(self.url, payload, format="json")
+
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(field, response.json())
+
+    def test_rejects_invalid_dataset_type(self):
+        response = self.client.post(
+            self.url,
+            {"name": "Dataset inválido", "type": "pdf"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("type", response.json())
+
+    def test_rejects_future_capture_date(self):
+        future_date = (timezone.localdate() + timedelta(days=1)).isoformat()
+
+        response = self.client.post(
+            self.url,
+            {
+                "name": "Dataset futuro",
+                "type": "audio",
+                "capture_date": future_date,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Dataset.objects.count(), 0)
+
+    def test_rejects_duplicate_s3_uri(self):
+        s3_uri = "s3://biogestor-data/audio/duplicate/"
+        Dataset.objects.create(
+            name="Dataset existente",
+            type="audio",
+            s3_uri=s3_uri,
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "name": "Dataset duplicado",
+                "type": "audio",
+                "storage": {"s3_uri": s3_uri},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Dataset.objects.count(), 1)
+
+    def test_post_is_hidden_when_debug_is_disabled(self):
+        with override_settings(DEBUG=False):
+            response = self.client.post(
+                self.url,
+                {"name": "No permitido", "type": "audio"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(Dataset.objects.count(), 0)
 
 
 class DatasetDetailEndpointTests(APITestCase):
