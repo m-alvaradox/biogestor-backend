@@ -1,0 +1,15 @@
+# Código general del backend
+* @Anlaye22 @Johegvel
+
+# Modelos y migraciones de Django
+**/models.py @Johegvel @SpaceStar26
+**/models/ @Johegvel @SpaceStar26
+**/migrations/ @Johegvel @SpaceStar26
+
+# Arquitectura y configuración
+/config/ @m-alvaradox @Anlaye22
+
+# DevOps y automatización
+/.github/ @Anlaye22 @SpaceStar26
+/Dockerfile @Anlaye22 @SpaceStar26
+/docker-compose*.yml @Anlaye22 @SpaceStar26
