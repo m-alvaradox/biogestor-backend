@@ -1,0 +1,117 @@
+
+name: "Technical Task"
+description: "Registrar una tarea técnica de BioGestor"
+title: "[Task] "
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Tarea técnica - BioGestor
+        Describe qué se entregará y para qué.
+        Sigue la Definition of Ready del proyecto.
+
+  - type: input
+    id: objective
+    attributes:
+      label: "Objetivo"
+      placeholder: "Ejemplo: Configurar CI del backend"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Descripción técnica"
+      description: "Explica el trabajo a realizar."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Área responsable"
+      options:
+        - Frontend
+        - Backend
+        - Base de datos
+        - CI/CD
+        - Arquitectura
+        - Multiarea
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: "Entregables"
+      placeholder: |
+        - Archivo o componente implementado
+        - Configuración documentada
+        - Pruebas correspondientes
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Criterios de aceptación"
+      description: "Define condiciones verificables."
+      placeholder: |
+        Dado que...
+        Cuando...
+        Entonces...
+    validations:
+      required: true
+
+  - type: input
+    id: estimation
+    attributes:
+      label: "Estimación"
+      placeholder: "Ejemplo: 4 horas / 3 puntos"
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: "Dependencias"
+      placeholder: "Issues relacionados o ninguna."
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: "Referencias técnicas"
+      placeholder: |
+        Documentación:
+        Archivos afectados:
+        Entidades o endpoints:
+        Decisiones ADR:
+
+  - type: input
+    id: owner
+    attributes:
+      label: "Responsable"
+      placeholder: "Usuario(s) de GitHub"
+    validations:
+      required: true
+
+  - type: input
+    id: sprint
+    attributes:
+      label: "Sprint"
+      placeholder: "Ejemplo: Sprint 1"
+
+  - type: checkboxes
+    id: ready
+    attributes:
+      label: "Definition of Ready"
+      options:
+        - label: "Objetivo y entregables definidos."
+        - label: "Criterios verificables."
+        - label: "Estimación acordada."
+        - label: "Dependencias identificadas."
+        - label: "La tarea cabe en el sprint."
+        - label: "El Product Owner aprobó el ítem."

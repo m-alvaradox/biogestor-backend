@@ -1,0 +1,32 @@
+
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+
+  categories:
+    - title: "🚀 Nuevas funcionalidades"
+      labels:
+        - enhancement
+        - feature
+
+    - title: "🐛 Correcciones de errores"
+      labels:
+        - bug
+        - fix
+
+    - title: "🔧 Mejoras técnicas"
+      labels:
+        - task
+        - refactor
+        - ci
+        - dependencies
+
+    - title: "📚 Documentación"
+      labels:
+        - documentation
+        - docs
+
+    - title: "📦 Otros cambios"
+      labels:
+        - "*"
