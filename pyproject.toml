@@ -20,6 +20,7 @@ source = [
     "apps.datasets.views",
     "apps.users.models",
     "apps.users.serializers",
+    "apps.users.views",
 ]
 
 [tool.coverage.report]

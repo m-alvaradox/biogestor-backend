@@ -347,6 +347,29 @@ curl -i http://127.0.0.1:8080/api/v1/datasets/1/
 curl -i http://127.0.0.1:8080/api/v1/datasets/999999/
 ~~~
 
+## Usuarios
+
+~~~http
+GET /api/v1/users/
+~~~
+
+Lista los usuarios activos que pueden asignarse como investigador responsable de un dataset, ordenados por nombre y sin paginación. Por ahora no requiere autenticación, igual que el catálogo. Los usuarios con `status = inactive` no aparecen y los métodos distintos de GET responden HTTP 405.
+
+Respuesta (HTTP 200):
+
+~~~json
+[
+  { "id": 2, "name": "Dra. Ana Lima" },
+  { "id": 3, "name": "Ing. Carlos Mora" }
+]
+~~~
+
+Cada elemento tiene la misma forma que `owner` en el catálogo y en el detalle de datasets. El `id` es el valor que recibe `owner` en `POST /api/v1/datasets/`.
+
+~~~bash
+curl -i http://127.0.0.1:8080/api/v1/users/
+~~~
+
 ## Modelos de dominio
 
 ### Dataset (`apps/datasets`)
@@ -369,7 +392,7 @@ La fecha de captura y la referencia única de S3 se validan con `full_clean()` y
 
 ### User (`apps/users`)
 
-Usuario según el diagrama de clases. Es un modelo de dominio: **no** reemplaza el usuario de autenticación de Django (`AUTH_USER_MODEL`) ni incluye login, permisos o endpoints; eso corresponde a otra tarea.
+Usuario según el diagrama de clases. Es un modelo de dominio: **no** reemplaza el usuario de autenticación de Django (`AUTH_USER_MODEL`) ni incluye login ni permisos; eso corresponde a otra tarea. Solo expone la lista de usuarios activos (ver "Usuarios").
 
 | Campo | Tipo | Obligatorio | Regla |
 | --- | --- | --- | --- |
@@ -426,4 +449,4 @@ En un entorno que no sea de desarrollo debe configurarse una clave segura, desha
 
 ## Alcance actual
 
-Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, los modelos de dominio `User` y `Dataset` con sus migraciones, el endpoint de catálogo de datasets, el comando `seed_data` de datos semilla de desarrollo, pruebas automatizadas y documentación de ejecución. No incluye todavía el resto de modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
+Incluye el proyecto Django, la estructura modular base, variables de entorno de ejemplo, configuración de PostgreSQL, endpoints de estado de la aplicación y de la base de datos, los modelos de dominio `User` y `Dataset` con sus migraciones, los endpoints de catálogo, registro y detalle de datasets, la lista de usuarios activos, el comando `seed_data` de datos semilla de desarrollo, pruebas automatizadas y documentación de ejecución. No incluye todavía el resto de modelos de dominio, autenticación de BioGestor, autorización por roles, integración real con S3, contrato de ingesta de BioDynamics ni despliegue de producción.
