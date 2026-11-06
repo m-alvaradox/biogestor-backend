@@ -14,7 +14,7 @@ class UserListEndpointTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])
 
-    def test_returns_only_id_and_name(self):
+    def test_returns_user_fields(self):
         user = User.objects.create(
             name="Dra. Ana Lima",
             email="ana@example.com",
@@ -24,7 +24,19 @@ class UserListEndpointTests(APITestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{"id": user.id, "name": "Dra. Ana Lima"}])
+        self.assertEqual(
+            response.json(),
+            [
+                {
+                    "id": user.id,
+                    "name": "Dra. Ana Lima",
+                    "email": "ana@example.com",
+                    "role": User.UserRole.ADMINISTRATOR,
+                    "dept": "Acuicultura",
+                    "status": User.UserStatus.ACTIVE,
+                }
+            ],
+        )
 
     def test_excludes_inactive_users(self):
         active = User.objects.create(name="Ana Lima", email="ana@example.com")

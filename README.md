@@ -359,12 +359,26 @@ Respuesta (HTTP 200):
 
 ~~~json
 [
-  { "id": 2, "name": "Dra. Ana Lima" },
-  { "id": 3, "name": "Ing. Carlos Mora" }
+  {
+    "id": 2,
+    "name": "Dra. Ana Lima",
+    "email": "ana@example.com",
+    "role": "administrator",
+    "dept": "Acuicultura",
+    "status": "active"
+  },
+  {
+    "id": 3,
+    "name": "Ing. Carlos Mora",
+    "email": "carlos@example.com",
+    "role": "administrator",
+    "dept": "Investigación",
+    "status": "active"
+  }
 ]
 ~~~
 
-Cada elemento tiene la misma forma que `owner` en el catálogo y en el detalle de datasets. El `id` es el valor que recibe `owner` en `POST /api/v1/datasets/`.
+Cada elemento incluye el correo (`email`), rol (`role`), departamento (`dept`) y estado (`status`) del usuario. En el catálogo y en el detalle de datasets, `owner` conserva su forma resumida (`id` y `name`). El `id` es el valor que recibe `owner` en `POST /api/v1/datasets/`.
 
 ~~~bash
 curl -i http://127.0.0.1:8080/api/v1/users/
