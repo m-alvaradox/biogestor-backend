@@ -84,3 +84,20 @@ class DatasetDetailSerializer(DatasetListSerializer):
             "type_metadata",
             "storage",
         ]
+
+
+class DatasetUpdateSerializer(DatasetCreateSerializer):
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        try:
+            instance.full_clean()
+        except DjangoValidationError as error:
+            if hasattr(error, "message_dict"):
+                raise serializers.ValidationError(error.message_dict) from error
+
+            raise serializers.ValidationError({"non_field_errors": error.messages}) from error
+
+        instance.save()
+        return instance
