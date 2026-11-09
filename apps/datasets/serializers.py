@@ -20,6 +20,7 @@ class DatasetStorageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dataset
         fields = ["s3_uri", "file_format", "size_bytes", "file_count"]
+        extra_kwargs = {"s3_uri": {"validators": []}}
 
 
 class DatasetCreateSerializer(serializers.ModelSerializer):
@@ -56,6 +57,19 @@ class DatasetCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("La fecha de captura no puede ser futura.")
 
         return value
+
+    def validate(self, attrs):
+        s3_uri = attrs.get("s3_uri")
+        if s3_uri:
+            duplicates = Dataset.objects.filter(s3_uri=s3_uri)
+            if self.instance is not None:
+                duplicates = duplicates.exclude(pk=self.instance.pk)
+            if duplicates.exists():
+                raise serializers.ValidationError(
+                    {"storage": {"s3_uri": ["Ya existe un dataset con esta referencia de S3."]}}
+                )
+
+        return attrs
 
     def create(self, validated_data):
         dataset = Dataset(**validated_data)
