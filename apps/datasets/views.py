@@ -1,7 +1,7 @@
 from django.conf import settings
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.permissions import AllowAny
 
 from .models import Dataset
@@ -10,6 +10,7 @@ from .serializers import (
     DatasetCreateSerializer,
     DatasetDetailSerializer,
     DatasetListSerializer,
+    DatasetUpdateSerializer,
 )
 
 
@@ -62,5 +63,23 @@ class DatasetListView(DatasetViewMixin, ListCreateAPIView):
         return super().create(request, *args, **kwargs)
 
 
-class DatasetDetailView(DatasetViewMixin, RetrieveAPIView):
+class DatasetDetailView(DatasetViewMixin, RetrieveUpdateDestroyAPIView):
     serializer_class = DatasetDetailSerializer
+
+    def get_serializer_class(self):
+        if self.request.method in ["PUT", "PATCH"]:
+            return DatasetUpdateSerializer
+
+        return DatasetDetailSerializer
+
+    def update(self, request, *args, **kwargs):
+        if not settings.DEBUG:
+            raise NotFound("No encontrado.")
+
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not settings.DEBUG:
+            raise NotFound("No encontrado.")
+
+        return super().destroy(request, *args, **kwargs)

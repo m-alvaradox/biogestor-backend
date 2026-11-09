@@ -271,6 +271,7 @@ class DatasetListEndpointTests(APITestCase):
         self.assertEqual(Dataset.objects.count(), 0)
 
 
+@override_settings(DEBUG=True)
 class DatasetDetailEndpointTests(APITestCase):
     def url(self, pk):
         return reverse("dataset-detail", args=[pk])
@@ -387,12 +388,134 @@ class DatasetDetailEndpointTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    def test_rejects_write_methods(self):
-        dataset = create_dataset("Cantos de aves")
+    def test_rejects_post(self):
+        dataset = create_dataset("Dataset existente")
 
-        for method in ["post", "put", "patch", "delete"]:
-            with self.subTest(method=method):
-                response = getattr(self.client, method)(self.url(dataset.pk), {})
+        response = self.client.post(self.url(dataset.pk), {})
 
-                self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.status_code, 405)
         self.assertTrue(Dataset.objects.filter(pk=dataset.pk).exists())
+
+    def test_put_updates_dataset_and_persists_changes(self):
+        dataset = create_dataset(
+            "Dataset original",
+            description="Descripción original",
+            species="Tilapia",
+        )
+
+        payload = {
+            "name": "Dataset actualizado",
+            "type": "image",
+            "status": "archived",
+            "description": "Nueva descripción",
+            "species": "Penaeus vannamei",
+        }
+
+        response = self.client.put(
+            self.url(dataset.pk),
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content.decode())
+
+        dataset.refresh_from_db()
+
+        self.assertEqual(dataset.name, "Dataset actualizado")
+        self.assertEqual(dataset.type, "image")
+        self.assertEqual(dataset.status, "archived")
+        self.assertEqual(dataset.description, "Nueva descripción")
+        self.assertEqual(dataset.species, "Penaeus vannamei")
+
+    def test_patch_updates_only_sent_fields(self):
+        dataset = create_dataset(
+            "Dataset original",
+            description="Descripción original",
+            species="Tilapia",
+        )
+
+        response = self.client.patch(
+            self.url(dataset.pk),
+            {"description": "Descripción modificada"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content.decode())
+
+        dataset.refresh_from_db()
+
+        self.assertEqual(dataset.description, "Descripción modificada")
+        self.assertEqual(dataset.name, "Dataset original")
+        self.assertEqual(dataset.species, "Tilapia")
+
+    def test_patch_rejects_future_capture_date(self):
+        dataset = create_dataset("Dataset original")
+        future_date = (timezone.localdate() + timedelta(days=1)).isoformat()
+
+        response = self.client.patch(
+            self.url(dataset.pk),
+            {"capture_date": future_date},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        dataset.refresh_from_db()
+        self.assertIsNone(dataset.capture_date)
+
+    def test_patch_rejects_duplicate_s3_uri(self):
+        existing_uri = "s3://biogestor-data/existing/"
+
+        Dataset.objects.create(
+            name="Dataset existente",
+            type="audio",
+            s3_uri=existing_uri,
+        )
+
+        dataset = create_dataset("Dataset a modificar")
+
+        response = self.client.patch(
+            self.url(dataset.pk),
+            {"storage": {"s3_uri": existing_uri}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        dataset.refresh_from_db()
+        self.assertIsNone(dataset.s3_uri)
+
+    def test_delete_removes_dataset_from_database(self):
+        dataset = create_dataset("Dataset para eliminar")
+        dataset_id = dataset.pk
+
+        response = self.client.delete(self.url(dataset_id))
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Dataset.objects.filter(pk=dataset_id).exists())
+
+    def test_write_methods_are_hidden_when_debug_is_disabled(self):
+        dataset = create_dataset("Dataset protegido")
+
+        with override_settings(DEBUG=False):
+            put_response = self.client.put(
+                self.url(dataset.pk),
+                {"name": "Intento de modificación", "type": "audio"},
+                format="json",
+            )
+
+            patch_response = self.client.patch(
+                self.url(dataset.pk),
+                {"name": "Intento de modificación"},
+                format="json",
+            )
+
+            delete_response = self.client.delete(self.url(dataset.pk))
+
+        self.assertEqual(put_response.status_code, 404)
+        self.assertEqual(patch_response.status_code, 404)
+        self.assertEqual(delete_response.status_code, 404)
+
+        self.assertTrue(Dataset.objects.filter(pk=dataset.pk).exists())
+        dataset.refresh_from_db()
+        self.assertEqual(dataset.name, "Dataset protegido")

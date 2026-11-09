@@ -308,27 +308,47 @@ curl -i -X POST http://127.0.0.1:8080/api/v1/datasets/ \
 
 ## Detalle de dataset
 
-~~~http
+```http
 GET /api/v1/datasets/<id>/
-~~~
+PUT /api/v1/datasets/<id>/
+PATCH /api/v1/datasets/<id>/
+DELETE /api/v1/datasets/<id>/
+```
 
-Devuelve un dataset con los campos del catálogo más su metadata y su almacenamiento. Por ahora no requiere autenticación, igual que el catálogo. Un id inexistente responde HTTP 404 y los métodos distintos de GET responden HTTP 405.
+Permite consultar, actualizar y eliminar un dataset existente.
 
-Respuesta (HTTP 200):
+- **GET:** devuelve los campos del catálogo, metadata y almacenamiento.
+- **PUT:** reemplaza los datos editables del dataset. Requiere los campos obligatorios `name` y `type`.
+- **PATCH:** permite actualizar parcialmente un dataset, modificando únicamente los campos enviados.
+- **DELETE:** elimina el registro del dataset en PostgreSQL y responde HTTP 204 sin contenido.
 
-~~~json
+Un identificador inexistente responde HTTP 404. Los datos inválidos responden HTTP 400.
+
+Las operaciones PUT, PATCH y DELETE solamente están habilitadas cuando `DEBUG=True`. Actualmente no requieren autenticación en desarrollo y no deben exponerse públicamente en producción hasta implementar autenticación y autorización.
+
+### Consultar dataset
+
+**Respuesta (HTTP 200):**
+
+```json
 {
   "id": 5,
   "name": "Lote de audio de tilapia 001",
   "type": "audio",
   "status": "active",
-  "owner": { "id": 2, "name": "Dra. Ana Lima" },
+  "owner": {
+    "id": 2,
+    "name": "Dra. Ana Lima"
+  },
   "created_at": "2026-10-28T22:51:18.551016-05:00",
   "species": "Tilapia (Oreochromis niloticus)",
   "farm": "Aquamar Norte",
   "pool": "Piscina A-3",
   "capture_date": "2024-10-12",
-  "type_metadata": { "microphone": "Hidrófono DolphinEar DE200", "sample_rate": 44100 },
+  "type_metadata": {
+    "microphone": "Hidrófono DolphinEar DE200",
+    "sample_rate": 44100
+  },
   "storage": {
     "s3_uri": "s3://biogestor-data/tilapia/audio/batch-001/",
     "file_format": ".WAV",
@@ -336,16 +356,87 @@ Respuesta (HTTP 200):
     "file_count": 1247
   }
 }
-~~~
+```
 
-- `type_metadata` es un JSON libre con los datos propios del tipo (micrófono, frecuencia de muestreo, resolución...).
-- `storage` agrupa la referencia al archivo en S3. `size_bytes` está en bytes y `file_format` incluye el punto (`.WAV`). Cuando exista el versionado de datasets, `storage` corresponderá a la versión más reciente.
+- `type_metadata` es un JSON libre con los datos propios del tipo (micrófono, frecuencia de muestreo, resolución, entre otros).
+- `storage` agrupa la referencia al archivo en S3. `size_bytes` está expresado en bytes y `file_format` incluye el punto (por ejemplo, `.WAV`).
 - Los campos opcionales sin valor se devuelven como `null`.
+- `owner` representa al usuario responsable del dataset.
 
-~~~bash
+**Ejemplos de consulta:**
+
+```bash
 curl -i http://127.0.0.1:8080/api/v1/datasets/1/
+
 curl -i http://127.0.0.1:8080/api/v1/datasets/999999/
-~~~
+```
+
+### Actualizar dataset mediante PUT
+
+PUT reemplaza los datos editables del dataset. Los campos obligatorios `name` y `type` deben incluirse en la solicitud.
+
+**Ejemplo de solicitud:**
+
+```bash
+curl -i -X PUT http://127.0.0.1:8080/api/v1/datasets/1/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Dataset actualizado",
+    "type": "audio",
+    "status": "active",
+    "description": "Descripción actualizada",
+    "species": "Penaeus vannamei"
+  }'
+```
+
+**Respuesta exitosa:** HTTP 200 OK.
+
+### Actualizar dataset mediante PATCH
+
+PATCH permite modificar parcialmente un dataset. Los campos que no se envían conservan sus valores actuales.
+
+**Ejemplo de solicitud:**
+
+```bash
+curl -i -X PATCH http://127.0.0.1:8080/api/v1/datasets/1/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Nueva descripción del dataset",
+    "species": "Penaeus vannamei"
+  }'
+```
+
+**Respuesta exitosa:** HTTP 200 OK.
+
+### Eliminar dataset mediante DELETE
+
+DELETE elimina el registro del dataset de PostgreSQL.
+
+**Ejemplo de solicitud:**
+
+```bash
+curl -i -X DELETE http://127.0.0.1:8080/api/v1/datasets/1/
+```
+
+**Respuesta exitosa:** HTTP 204 No Content.
+
+La eliminación afecta únicamente al registro de PostgreSQL. No elimina los archivos almacenados en S3 ni sus objetos asociados.
+
+### Validaciones y respuestas HTTP
+
+| Código HTTP | Descripción |
+|---|---|
+| `200 OK` | Consulta o actualización exitosa. |
+| `204 No Content` | Eliminación exitosa, sin contenido en la respuesta. |
+| `400 Bad Request` | Datos inválidos, campos obligatorios ausentes en PUT, fecha de captura futura o referencia S3 duplicada. |
+| `404 Not Found` | Dataset inexistente o modificación/eliminación deshabilitada cuando `DEBUG=False`. |
+| `405 Method Not Allowed` | Método HTTP no permitido para el endpoint. |
+
+### Consideraciones de seguridad
+
+Las operaciones PUT, PATCH y DELETE están habilitadas exclusivamente en el entorno de desarrollo (`DEBUG=True`). Actualmente no requieren autenticación ni autorización por usuario.
+
+Antes de exponer estas operaciones en producción será necesario implementar autenticación y autorización para controlar quién puede modificar o eliminar datasets.
 
 ## Usuarios
 
