@@ -481,9 +481,26 @@ class DatasetDetailEndpointTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+        self.assertIn("s3_uri", response.data["storage"])
 
         dataset.refresh_from_db()
         self.assertIsNone(dataset.s3_uri)
+
+    def test_patch_accepts_unchanged_s3_uri(self):
+        s3_uri = "s3://biogestor-data/audio/unchanged/"
+        dataset = create_dataset("Dataset con referencia", s3_uri=s3_uri)
+
+        response = self.client.patch(
+            self.url(dataset.pk),
+            {"name": "Dataset renombrado", "storage": {"s3_uri": s3_uri}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        dataset.refresh_from_db()
+        self.assertEqual(dataset.name, "Dataset renombrado")
+        self.assertEqual(dataset.s3_uri, s3_uri)
 
     def test_delete_removes_dataset_from_database(self):
         dataset = create_dataset("Dataset para eliminar")
