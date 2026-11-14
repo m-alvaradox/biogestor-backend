@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 
 from apps.users.models import User
 
-from .models import Dataset
+from ..models import Dataset
 
 
 def create_dataset(name, **fields):

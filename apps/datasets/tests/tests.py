@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from apps.users.models import User
 
-from .models import Dataset
+from ..models import Dataset
 
 
 class DatasetRequiredFieldsTests(TestCase):
