@@ -9,8 +9,8 @@ from django.test import TestCase, override_settings
 
 from apps.users.models import User
 
-from .management.commands.seed_data import DATASETS, USERS
-from .models import Dataset
+from ..management.commands.seed_data import DATASETS, USERS
+from ..models import Dataset
 
 
 def run_seed(**options):

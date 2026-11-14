@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 
 from apps.users.models import User
 
-from .models import Dataset
+from ..models import Dataset
 
 
 def create_dataset(name, **fields):
@@ -270,6 +270,82 @@ class DatasetListEndpointTests(APITestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(Dataset.objects.count(), 0)
 
+    def test_registered_dataset_is_persisted_and_appears_in_catalog(self):
+        owner = User.objects.create(
+            name="Investigador S2-05",
+            email="investigador-s205@example.com",
+        )
+
+        payload = {
+            "name": "Dataset integración S2-05",
+            "type": "csv",
+            "owner": owner.pk,
+            "description": "Prueba completa de registro",
+            "species": "Penaeus vannamei",
+            "type_metadata": {
+                "delimiter": ",",
+                "encoding": "utf-8",
+            },
+            "storage": {
+                "s3_uri": "s3://biogestor-tests/s2-05/integration/",
+                "file_format": ".CSV",
+                "size_bytes": 2048,
+                "file_count": 1,
+            },
+        }
+
+        # 1. Registrar mediante POST.
+        post_response = self.client.post(
+            self.url,
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(
+            post_response.status_code,
+            201,
+            post_response.content.decode(),
+        )
+
+        dataset_id = post_response.json()["id"]
+
+        # 2. Comprobar persistencia en PostgreSQL.
+        dataset = Dataset.objects.get(pk=dataset_id)
+
+        self.assertEqual(dataset.name, payload["name"])
+        self.assertEqual(dataset.type, payload["type"])
+        self.assertEqual(dataset.owner_id, owner.pk)
+        self.assertEqual(dataset.description, payload["description"])
+        self.assertEqual(dataset.species, payload["species"])
+        self.assertEqual(dataset.type_metadata, payload["type_metadata"])
+        self.assertEqual(
+            dataset.s3_uri,
+            payload["storage"]["s3_uri"],
+        )
+        self.assertEqual(dataset.file_format, ".CSV")
+        self.assertEqual(dataset.size_bytes, 2048)
+        self.assertEqual(dataset.file_count, 1)
+
+        # 3. Comprobar que aparece en el catálogo.
+        get_response = self.client.get(self.url)
+
+        self.assertEqual(get_response.status_code, 200)
+
+        results = get_response.json()["results"]
+        catalog_dataset = next(
+            (item for item in results if item["id"] == dataset_id),
+            None,
+        )
+
+        self.assertIsNotNone(catalog_dataset)
+        self.assertEqual(catalog_dataset["name"], payload["name"])
+        self.assertEqual(catalog_dataset["type"], "csv")
+        self.assertEqual(catalog_dataset["status"], "active")
+        self.assertEqual(
+            catalog_dataset["owner"],
+            {"id": owner.pk, "name": owner.name},
+        )
+
 
 @override_settings(DEBUG=True)
 class DatasetDetailEndpointTests(APITestCase):
@@ -501,6 +577,38 @@ class DatasetDetailEndpointTests(APITestCase):
         dataset.refresh_from_db()
         self.assertEqual(dataset.name, "Dataset renombrado")
         self.assertEqual(dataset.s3_uri, s3_uri)
+
+    def test_put_accepts_unchanged_s3_uri(self):
+        s3_uri = "s3://biogestor-data/audio/put-unchanged/"
+        dataset = create_dataset(
+            "Dataset original",
+            s3_uri=s3_uri,
+        )
+
+        payload = {
+            "name": "Dataset actualizado",
+            "type": "audio",
+            "storage": {
+                "s3_uri": s3_uri,
+            },
+        }
+
+        response = self.client.put(
+            self.url(dataset.pk),
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content.decode())
+
+        dataset.refresh_from_db()
+
+        self.assertEqual(dataset.name, "Dataset actualizado")
+        self.assertEqual(dataset.s3_uri, s3_uri)
+        self.assertEqual(
+            Dataset.objects.filter(s3_uri=s3_uri).count(),
+            1,
+        )
 
     def test_delete_removes_dataset_from_database(self):
         dataset = create_dataset("Dataset para eliminar")
