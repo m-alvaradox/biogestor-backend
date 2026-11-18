@@ -3,9 +3,9 @@ from datetime import date, timedelta
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
-from rest_framework.test import APITestCase
 
 from apps.users.models import User
+from apps.users.testing import AuthenticatedAPITestCase
 
 from ..models import Dataset
 
@@ -16,8 +16,9 @@ def create_dataset(name, **fields):
 
 
 @override_settings(DEBUG=True)
-class DatasetListEndpointTests(APITestCase):
+class DatasetListEndpointTests(AuthenticatedAPITestCase):
     def setUp(self):
+        super().setUp()
         self.url = reverse("dataset-list")
 
     def names(self, response):
@@ -348,7 +349,7 @@ class DatasetListEndpointTests(APITestCase):
 
 
 @override_settings(DEBUG=True)
-class DatasetDetailEndpointTests(APITestCase):
+class DatasetDetailEndpointTests(AuthenticatedAPITestCase):
     def url(self, pk):
         return reverse("dataset-detail", args=[pk])
 

@@ -1,6 +1,7 @@
 """Configuración base de Django para BioGestor."""
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -37,6 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "apps.core.apps.CoreConfig",
     "apps.users.apps.UsersConfig",
     "apps.datasets.apps.DatasetsConfig",
@@ -114,10 +116,41 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Las futuras vistas DRF requerirán autenticación de manera predeterminada.
+# Las vistas DRF requieren autenticación de manera predeterminada.
 # Los endpoints públicos deberán declararse explícitamente.
 REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "apps.users.authentication.PlatformJWTAuthentication",
+    ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
 }
+
+# Autenticación JWT (S2-06 / S2-07).
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(hours=24),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": False,
+    "USER_AUTHENTICATION_RULE": "apps.users.authentication.user_can_authenticate",
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+# El refresh token viaja solo en una cookie HttpOnly limitada a /api/v1/auth/.
+AUTH_REFRESH_COOKIE_NAME = "biogestor_refresh"
+AUTH_REFRESH_COOKIE_PATH = "/api/v1/auth/"
+AUTH_REFRESH_COOKIE_SAMESITE = "Lax"
+AUTH_REFRESH_COOKIE_SECURE = os.getenv("DJANGO_AUTH_COOKIE_SECURE", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
+# Nombres que Angular (HttpClient) usa por defecto para la protección CSRF.
+CSRF_COOKIE_NAME = "XSRF-TOKEN"
+CSRF_HEADER_NAME = "HTTP_X_XSRF_TOKEN"
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SECURE = AUTH_REFRESH_COOKIE_SECURE

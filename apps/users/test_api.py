@@ -1,11 +1,12 @@
 from django.urls import reverse
-from rest_framework.test import APITestCase
 
 from .models import User
+from .testing import AuthenticatedAPITestCase
 
 
-class UserListEndpointTests(APITestCase):
+class UserListEndpointTests(AuthenticatedAPITestCase):
     def setUp(self):
+        super().setUp()
         self.url = reverse("user-list")
 
     def test_returns_empty_list_when_there_are_no_users(self):

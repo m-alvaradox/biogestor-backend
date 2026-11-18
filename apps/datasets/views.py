@@ -2,7 +2,6 @@ from django.conf import settings
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
-from rest_framework.permissions import AllowAny
 
 from .models import Dataset
 from .pagination import DatasetPagination
@@ -16,7 +15,6 @@ from .serializers import (
 
 class DatasetViewMixin:
     queryset = Dataset.objects.select_related("owner")
-    permission_classes = [AllowAny]
 
 
 class DatasetListView(DatasetViewMixin, ListCreateAPIView):
