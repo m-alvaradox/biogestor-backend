@@ -21,6 +21,9 @@ source = [
     "apps.users.models",
     "apps.users.serializers",
     "apps.users.views",
+    "apps.users.authentication",
+    "apps.users.auth_views",
+    "apps.users.management.commands.set_user_password",
 ]
 
 [tool.coverage.report]
