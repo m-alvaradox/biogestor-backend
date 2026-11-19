@@ -1,8 +1,7 @@
-
 name: "🐛 Bug Report"
-description: "Reportar un error en BioGestor"
-title: "[Bug] "
-labels: ["bug"]
+description: "Reportar un error del backend de BioGestor"
+title: "[Backend] "
+labels: ["bug", "área:backend"]
 body:
   - type: markdown
     attributes:
