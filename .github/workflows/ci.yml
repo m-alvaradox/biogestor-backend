@@ -46,6 +46,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -81,15 +83,41 @@ jobs:
       - name: Run tests with coverage
         run: |
           coverage run manage.py test
-          coverage report --fail-under=70
+          coverage report
+          coverage xml
+          coverage html
+
+      # CA-02: only the lines changed by the PR must reach 70 % coverage.
+      - name: Check coverage of new code (diff-cover)
+        if: github.event_name == 'pull_request'
+        run: |
+          diff-cover coverage.xml \
+            --compare-branch="origin/${{ github.base_ref }}" \
+            --fail-under=70 \
+            --format markdown:diff-coverage.md
 
       - name: Coverage summary
         if: always()
         run: |
-          echo '### Cobertura' >> "$GITHUB_STEP_SUMMARY"
+          echo '### Cobertura total' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           coverage report >> "$GITHUB_STEP_SUMMARY" || true
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f diff-coverage.md ]; then
+            echo '### Cobertura del código nuevo' >> "$GITHUB_STEP_SUMMARY"
+            cat diff-coverage.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            htmlcov/
+            diff-coverage.md
+          if-no-files-found: ignore
 
   docker:
     name: Compilación de imagen Docker

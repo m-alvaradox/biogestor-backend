@@ -11,18 +11,21 @@ quote-style = "double"
 
 [tool.coverage.run]
 branch = true
-source = [
-    "apps.core.views",
-    "apps.core.models",
-    "apps.datasets.models",
-    "apps.datasets.pagination",
-    "apps.datasets.serializers",
-    "apps.datasets.views",
-    "apps.users.models",
-    "apps.users.serializers",
-    "apps.users.views",
+# Measure whole packages, not a hand-picked list: any new module under
+# apps/ or config/ is measured automatically, even if no test imports it.
+source = ["apps", "config"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/tests.py",
+    "*/test_*.py",
+    "config/asgi.py",
+    "config/wsgi.py",
 ]
+# Paths relative to the repo root so diff-cover can match them with git diff.
+relative_files = true
 
 [tool.coverage.report]
 show_missing = true
+skip_empty = true
 fail_under = 70
